@@ -40,6 +40,7 @@ int main(int argc, char *argv[]) {
     //string path = "twitter_points_20 copiaridotta.csv";
     node.readDataset();
     node.scatterDataset();
+    node.extractCluster();
 
 
     MPI_Finalize();
