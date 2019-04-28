@@ -15,7 +15,7 @@ Node::Node(int rank, MPI_Comm comm) : rank(rank) , comm(comm) {
 
     //Create vector<Point> Datatype in order to be able to send and receive element of struct Punto
     int blocksize[] = {MAX_DIM, 1};
-    MPI_Aint displ[] = {0, offsetof(Punto, size)};
+    MPI_Aint displ[] = {0, offsetof(Punto, id)};
     MPI_Datatype blockType[] = {MPI_DOUBLE, MPI_INT};
 
     MPI_Type_create_struct(2, blocksize, displ, blockType, &pointType);
@@ -24,6 +24,7 @@ Node::Node(int rank, MPI_Comm comm) : rank(rank) , comm(comm) {
 }
 
 void Node::readDataset() {
+
     if (rank == 0) {
 
         // READ DATASET
@@ -43,8 +44,14 @@ void Node::readDataset() {
                 getline(ss, line, ';');
                 total_values = stoi(line);
                 cout << "Total values is: " << total_values << endl;
+
+                getline(ss, line, ';');
+                K = stoi(line);
+                cout << "Number of clusters K is: " << K << endl;
                 //Aggiungere qui gli ulteriori campi della prima riga (num points, num clusters, iterations) con
                 // lo stesso format di total_values: quindi scrivere getline(ss, line, ';');     total_values = stoi(line);
+
+
                 getline(ss, line, '\n');
                 max_iterations = stoi(line);
                 cout << "Max iteration is: " << max_iterations << endl;
@@ -52,12 +59,12 @@ void Node::readDataset() {
                 //dataset.resize(total_values);
             } else {
                 Punto point;
-                point.size = total_values;
+                point.id = num;
                 //getline(infile, line);
                 int i = 0;
                 stringstream ss(line);
                 while(getline(ss, line, ';')){
-                    //cout << "Put value " << line << " in the array num " << num  << endl;
+                    //cout << "Put value " << line << " in the array num " << point.id << endl;
                     point.values[i] = stod(line);
                     //cout << "Il valore aggiunto è: " << point.values[i] << "\n" << endl;
                     i++;
@@ -77,6 +84,8 @@ void Node::readDataset() {
 
 
 void Node::scatterDataset() {
+    /* Scatter dataset among nodes */
+
     int numNodes;
     MPI_Comm_size(comm, &numNodes);
 
@@ -102,7 +111,6 @@ void Node::scatterDataset() {
         //Vector contains strides (https://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node72.html) so, we need to
         // know precisely where starting to divide the several part of the vector<Punto>
 
-
         int sum = 0;
         for(int i = 0; i < numNodes; i++){
             if(i == 0){
@@ -122,10 +130,77 @@ void Node::scatterDataset() {
 
     MPI_Scatterv(dataset.data(), pointsPerNode, datasetDisp, pointType, localDataset.data(), num_local_points, pointType, 0, MPI_COMM_WORLD);
 
-
-    if(rank == 1){
-        cout << "First element of Node 1 has values : " << localDataset[0].values[0] << ". Last one is " << localDataset[0].values[19] << endl;
+    /*
+    if(rank == 3){
+        cout << "First element of Node 3 has values : " << localDataset[0].values[0] << ". Last one is " << localDataset[0].values[19] << endl;
     }
+    */
 }
+
+
+
+void Node::extractCluster() {
+
+    /* To extract initially the clusters, we choose randomly K point of the dataset. This action is performed
+     * by the Node 0, who sends them to other nodes in broadast */
+
+    if(rank == 0){
+        if( K >= dataset.size()){
+            cout << "ERROR: Number of cluster >= number of points " << endl;
+        }
+
+        vector<int> clusterIndices;
+        vector<int> prohibitedIndices;
+
+        for(int i = 0; i < K; i++) {
+            while (true) {            //TODO fix double loop
+                int randIndex = rand() % dataset.size();
+
+                if (find(prohibitedIndices.begin(), prohibitedIndices.end(), randIndex) == prohibitedIndices.end()) {
+                    prohibitedIndices.push_back(randIndex);
+                    clusterIndices.push_back(randIndex);
+                    break;
+                }
+            }
+        }
+
+        //Take points which refer to clusterIndeces and send them in broadcast to all Nodes
+
+        /* C++11 extension
+        for(auto&& x: clusterIndices){      //packed range-based for loop  (https://www.quora.com/How-do-I-iterate-through-a-vector-using-for-loop-in-C++)
+            clusters.push_back(dataset[x]);
+        }
+         */
+
+        for(int i = 0; i < clusterIndices.size(); i++){
+            clusters.push_back(dataset[clusterIndices[i]]);
+        }
+
+        /*
+        cout << "The id of point chosen for initial values of cluster are : " << endl;
+        for(int i = 0; i < clusters.size(); i++){
+            cout << "Cluster referring to point with id: " << clusters[i].id << " with first value " << clusters[i].values[0] << endl;
+        }
+         */
+
+    }
+
+    MPI_Bcast(&K, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    clusters.resize(K);
+
+    MPI_Bcast(clusters.data(), K, pointType, 0, MPI_COMM_WORLD);
+
+    /*
+    if( rank == 1){
+        cout << "Node " << rank << " receive the clusters with the following values:" << endl;
+        for(int i = 0; i < clusters.size(); i++){
+            cout << "Node " << rank << " has cluster " << clusters[i].id << " with first value " << clusters[i].values[0] << endl;
+        }
+    }
+     */
+}
+
+
 
 
