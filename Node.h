@@ -28,12 +28,14 @@ private:
 
     vector<Punto> dataset;
     vector<Punto> localDataset;
+    vector<Punto> clusters;
     int numPointsPerNode;
 
 public:
     Node(int rank, MPI_Comm comm = MPI_COMM_WORLD);
     void readDataset();
     void scatterDataset();
+    void extractCluster();
 };
 
 
