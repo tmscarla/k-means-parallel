@@ -1,50 +1,49 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
-#include <stdlib.h>
-#include <time.h>
 #include <algorithm>
 #include "Point.h"
-#include "Cluster.h"
-#include "KMeans.h"
+#include "Node.h"
+#include <stddef.h>
+#include <mpi.h>
+#include <fstream>
+#include <sstream>
 
-int main() {
-    srand (time(NULL));
 
-    int total_points, total_values, K, max_iterations, has_name;
+#define MAX_DIM 25
 
-    cin >> total_points >> total_values >> K >> max_iterations >> has_name;
+using namespace std;
 
-    vector<Point> points;
-    string point_name;
+/*Dobbiamo per forza creare una classe o una struct Point per fare in modo che il punto venga salvato in un
+ * vettore. Non si può creare un vettore di arrays di double*/
 
-    for(int i = 0; i < total_points; i++)
-    {
-        vector<double> values;
 
-        for(int j = 0; j < total_values; j++)
-        {
-            double value;
-            cin >> value;
-            values.push_back(value);
-        }
+int main(int argc, char *argv[]) {
+    srand(time(NULL));
 
-        if(has_name)
-        {
-            cin >> point_name;
-            Point p(i, values, point_name);
-            points.push_back(p);
-        }
-        else
-        {
-            Point p(i, values);
-            points.push_back(p);
-        }
-    }
+    int numNodes, rank, sendcount, recvcount, source;
+    const int tag = 13;
 
-    KMeans kmeans(K, total_points, total_values, max_iterations);
-    kmeans.run(points);
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &numNodes);
 
-    return 0;
+    cout << "I'm rank: " << rank << endl;
+
+    int total_values;
+    int total_points;
+    int K, max_iterations;
+    vector<Punto> dataset;
+
+    Node node(rank, MPI_COMM_WORLD);
+
+    //string path = "twitter_points_20 copiaridotta.csv";
+    node.readDataset();
+    node.scatterDataset();
+
+
+    MPI_Finalize();
+    //Un punto è un array di valori double. Leggere prima la dimensione di ciascun punto, poi creare i punti
+    // come array con quella dimensione
 
 }
