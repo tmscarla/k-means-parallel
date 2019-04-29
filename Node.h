@@ -29,13 +29,20 @@ private:
     vector<Punto> dataset;
     vector<Punto> localDataset;
     vector<Punto> clusters;
+    vector<Punto> localSum;
     int numPointsPerNode;
+    vector<int> memberships; //This vector has same length as localDataset: for each point in localDataset is
+                            // associated the id of nearest cluster in the corresponding position in membership
+    //TODO gestire anche la globalMembership
 
 public:
     Node(int rank, MPI_Comm comm = MPI_COMM_WORLD);
     void readDataset();
     void scatterDataset();
     void extractCluster();
+    int getIdNearestCluster(Punto p);
+    //void distributedPointSum(vector<Punto> *in, vector<Punto> *inout, int* len, MPI_Datatype* dptr);
+    void run();
 };
 
 

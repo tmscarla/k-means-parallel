@@ -41,6 +41,7 @@ int main(int argc, char *argv[]) {
     node.readDataset();
     node.scatterDataset();
     node.extractCluster();
+    node.run();
 
 
     MPI_Finalize();

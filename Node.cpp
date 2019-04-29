@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <fstream>
 #include <sstream>
+#include <math.h>
 #include "Node.h"
 
 Node::Node(int rank, MPI_Comm comm) : rank(rank) , comm(comm) {
@@ -31,9 +32,6 @@ void Node::readDataset() {
         ifstream infile("twitter_points_20 copiaridotta.csv");
         string line;
         cout << "Leggo il file" << endl;
-
-        /*Potremmo mettere un id di un punto in modo che i cluster mantengano gli id dei punti. Che poi in realtà
-         * è come se ce l'avessimo di già, è la variabile num*/
 
         int count = 0;
         int num = 0;
@@ -135,6 +133,14 @@ void Node::scatterDataset() {
         cout << "First element of Node 3 has values : " << localDataset[0].values[0] << ". Last one is " << localDataset[0].values[19] << endl;
     }
     */
+
+    //Send the dimension of points to each node
+    MPI_Bcast(&total_values, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    memberships.resize(num_local_points);
+    for(int i = 0; i < num_local_points; i++){
+        memberships[i] = -1;
+    }
 }
 
 
@@ -142,11 +148,12 @@ void Node::scatterDataset() {
 void Node::extractCluster() {
 
     /* To extract initially the clusters, we choose randomly K point of the dataset. This action is performed
-     * by the Node 0, who sends them to other nodes in broadast */
+     * by the Node 0, who sends them to other nodes in broadast. Ids of clusters are the same of their initial centroid point  */
 
     if(rank == 0){
         if( K >= dataset.size()){
             cout << "ERROR: Number of cluster >= number of points " << endl;
+            return;
         }
 
         vector<int> clusterIndices;
@@ -185,10 +192,12 @@ void Node::extractCluster() {
 
     }
 
+    //Send the number of clusters in broadcast
     MPI_Bcast(&K, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     clusters.resize(K);
 
+    //Send the clusters centroids
     MPI_Bcast(clusters.data(), K, pointType, 0, MPI_COMM_WORLD);
 
     /*
@@ -200,6 +209,109 @@ void Node::extractCluster() {
     }
      */
 }
+
+int Node::getIdNearestCluster(Punto p) {
+    double sum = 0.0;
+    double min_dist;
+    int idCluster = 0;
+
+    //Initialize sum and min_dist
+    for(int i = 0; i < total_values; i++){
+        sum += pow( clusters[0].values[i] - p.values[i], 2.0);
+    }
+
+    min_dist = sqrt(sum);
+    //cout << "Point " << p.id << " is distantiated from cluster 0: " << min_dist << endl;
+
+    //Compute the distance from others clusters
+    for(int k = 1; k < K; k++){
+
+        double dist;
+        sum = 0.0;
+
+        for(int i = 0; i < total_values; i++){
+            sum += pow( clusters[k].values[i] - p.values[i], 2.0);
+        }
+
+        dist = sqrt(sum);
+        //cout << "Point " << p.id << " is distantiated from cluster " << k << ": " << dist << endl;
+
+        if(dist < min_dist){
+            min_dist = dist;
+            idCluster = k;
+        }
+    }
+
+    return idCluster;
+}
+
+
+void func(Punto *in, Punto *inout, int *len, const MPI_Datatype *dptr) {
+    /*params:
+     *      len: corresponds to the dimension of each point (so must be equal to total_values)
+     */
+    int i = 0;
+    //int size = in->size();
+    vector<Punto> results;
+
+    //for(int i = 0; i < size; i++){
+    while(in != NULL){
+        for(int j = 0; j < *len; j++){
+            results[i].values[j] = in->values[j] + inout->values[j];
+        }
+        results[i].id = in->id;
+        i++;
+    }
+    inout = results.data();
+}
+
+void Node::run(){
+
+    localSum.resize(K);
+
+    for(int i = 0; i < localDataset.size(); i++){
+
+        int old_mem = memberships[i];
+        int new_mem = getIdNearestCluster(localDataset[i]);
+
+        if(old_mem == -1){
+            memberships[i] = new_mem;
+        }
+        else if( new_mem < old_mem){
+            memberships[i] = new_mem;
+        }
+
+        for(int j = 0; j < total_values; j++){
+            localSum[memberships[i]].values[j] += localDataset[i].values[j];
+        }
+
+        cout << "In Node " << rank << " the localSum of cluster  " << clusters[i].id << " has values  0" << " equal to " << localSum[i].values[0] << endl;
+
+
+    }
+
+
+    /*To recalculate cluster centroids, we sum locally the points (values-to-values) which belong to a cluster.
+     * The result will be a point with values equal to that sum. This point is sent (with AllReduce) to each
+     * node by each node with AllReduce which computes the sum of each value-to-value among all sent points.*/
+
+    MPI_Op myOp;
+    MPI_Op_create((MPI_User_function*)func, true, &myOp);
+
+    MPI_Allreduce(localSum.data(), localSum.data(), total_values, pointType, myOp, MPI_COMM_WORLD);     //TODO fix this
+
+
+    if(rank == 0){
+        for(int i = 0; i < K; i++){
+            cout << "After MPI_Allreduce, In Node " << rank << " the localSum of cluster  " << clusters[i].id << " has values 0 " << " equal to " << localSum[i].values[0] << endl;
+
+        }
+    }
+
+}
+
+
+
 
 
 
