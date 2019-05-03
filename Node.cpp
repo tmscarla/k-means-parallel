@@ -12,14 +12,14 @@
 #include <math.h>
 #include "Node.h"
 
-Node::Node(int rank, MPI_Comm comm) : rank(rank) , comm(comm) {
+Node::Node(int rank, MPI_Comm comm) : rank(rank), comm(comm) {
 
     //Create vector<Point> Datatype in order to be able to send and receive element of struct Punto
-    int blocksize[] = {MAX_DIM, 1};
-    MPI_Aint displ[] = {0, offsetof(Punto, id)};
-    MPI_Datatype blockType[] = {MPI_DOUBLE, MPI_INT};
+    int blocksize[] = {MAX_DIM, 1, 1};
+    MPI_Aint displ[] = {0, offsetof(Punto, id), offsetof(Punto, size)};
+    MPI_Datatype blockType[] = {MPI_DOUBLE, MPI_INT, MPI_INT};
 
-    MPI_Type_create_struct(2, blocksize, displ, blockType, &pointType);
+    MPI_Type_create_struct(3, blocksize, displ, blockType, &pointType);
     MPI_Type_commit(&pointType);
 
 }
@@ -35,7 +35,7 @@ void Node::readDataset() {
 
         int count = 0;
         int num = 0;
-        while(getline(infile, line, '\n')){
+        while (getline(infile, line, '\n')) {
             if (count == 0) {
                 cout << "la prima riga è " << line << endl;
                 stringstream ss(line);
@@ -58,10 +58,11 @@ void Node::readDataset() {
             } else {
                 Punto point;
                 point.id = num;
+                point.size = total_values;
                 //getline(infile, line);
                 int i = 0;
                 stringstream ss(line);
-                while(getline(ss, line, ';')){
+                while (getline(ss, line, ';')) {
                     //cout << "Put value " << line << " in the array num " << point.id << endl;
                     point.values[i] = stod(line);
                     //cout << "Il valore aggiunto è: " << point.values[i] << "\n" << endl;
@@ -76,7 +77,7 @@ void Node::readDataset() {
         infile.close();
 
         //cout << "First element has values : " << dataset[2].values[0] << ". Last one is " << dataset[2].values[19] << endl;
-
+        cout << "Lettura completata" << endl;
     }
 }
 
@@ -90,18 +91,18 @@ void Node::scatterDataset() {
     int pointsPerNode[numNodes];
     int datasetDisp[numNodes];
 
-    if(rank == 0) {
+    if (rank == 0) {
         int numPoints = dataset.size(); //forse è di tipo unsigned long
         cout << "Total points: " << numPoints << endl;
 
-        int partial = numPoints/numNodes;
+        int partial = numPoints / numNodes;
         fill_n(pointsPerNode, numNodes, partial);
 
         /* Assing remainder R of the division to first R node*/
-        if((numPoints % numNodes) != 0){
+        if ((numPoints % numNodes) != 0) {
             int r = numPoints % numNodes;
 
-            for(int i = 0; i < r; i ++){
+            for (int i = 0; i < r; i++) {
                 pointsPerNode[i] += 1;
             }
         }
@@ -110,11 +111,11 @@ void Node::scatterDataset() {
         // know precisely where starting to divide the several part of the vector<Punto>
 
         int sum = 0;
-        for(int i = 0; i < numNodes; i++){
-            if(i == 0){
+        for (int i = 0; i < numNodes; i++) {
+            if (i == 0) {
                 datasetDisp[i] = 0;
-            }else{
-                sum += pointsPerNode[i-1];
+            } else {
+                sum += pointsPerNode[i - 1];
                 datasetDisp[i] = sum;
             }
         }
@@ -126,23 +127,24 @@ void Node::scatterDataset() {
 
     localDataset.resize(num_local_points);
 
-    MPI_Scatterv(dataset.data(), pointsPerNode, datasetDisp, pointType, localDataset.data(), num_local_points, pointType, 0, MPI_COMM_WORLD);
+    MPI_Scatterv(dataset.data(), pointsPerNode, datasetDisp, pointType, localDataset.data(), num_local_points,
+                 pointType, 0, MPI_COMM_WORLD);
 
     /*
     if(rank == 3){
-        cout << "First element of Node 3 has values : " << localDataset[0].values[0] << ". Last one is " << localDataset[0].values[19] << endl;
+        cout << "First element of Node 3 has values : " << localDataset[0].values[0] << ". Last one is " << localDataset[0].values[19] << ". The size of each point is "<< localDataset[0].size << endl;
     }
-    */
+     */
+
 
     //Send the dimension of points to each node
     MPI_Bcast(&total_values, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     memberships.resize(num_local_points);
-    for(int i = 0; i < num_local_points; i++){
+    for (int i = 0; i < num_local_points; i++) {
         memberships[i] = -1;
     }
 }
-
 
 
 void Node::extractCluster() {
@@ -150,8 +152,8 @@ void Node::extractCluster() {
     /* To extract initially the clusters, we choose randomly K point of the dataset. This action is performed
      * by the Node 0, who sends them to other nodes in broadast. Ids of clusters are the same of their initial centroid point  */
 
-    if(rank == 0){
-        if( K >= dataset.size()){
+    if (rank == 0) {
+        if (K >= dataset.size()) {
             cout << "ERROR: Number of cluster >= number of points " << endl;
             return;
         }
@@ -159,7 +161,7 @@ void Node::extractCluster() {
         vector<int> clusterIndices;
         vector<int> prohibitedIndices;
 
-        for(int i = 0; i < K; i++) {
+        for (int i = 0; i < K; i++) {
             while (true) {            //TODO fix double loop
                 int randIndex = rand() % dataset.size();
 
@@ -179,16 +181,17 @@ void Node::extractCluster() {
         }
          */
 
-        for(int i = 0; i < clusterIndices.size(); i++){
+        for (int i = 0; i < clusterIndices.size(); i++) {
             clusters.push_back(dataset[clusterIndices[i]]);
         }
 
-        /*
+
         cout << "The id of point chosen for initial values of cluster are : " << endl;
-        for(int i = 0; i < clusters.size(); i++){
-            cout << "Cluster referring to point with id: " << clusters[i].id << " with first value " << clusters[i].values[0] << endl;
+        for (int i = 0; i < clusters.size(); i++) {
+            cout << "Cluster referring to point with id: " << clusters[i].id << " with first value "
+                 << clusters[i].values[0] << endl;
         }
-         */
+
 
     }
 
@@ -213,104 +216,192 @@ void Node::extractCluster() {
 int Node::getIdNearestCluster(Punto p) {
     double sum = 0.0;
     double min_dist;
-    int idCluster = 0;
+    int idCluster = 0;  //is the position in the vector clusters, not the id of the point that represents the initial centroid
 
     //Initialize sum and min_dist
-    for(int i = 0; i < total_values; i++){
-        sum += pow( clusters[0].values[i] - p.values[i], 2.0);
+    for (int i = 0; i < total_values; i++) {
+        sum += pow(clusters[0].values[i] - p.values[i], 2.0);
     }
 
     min_dist = sqrt(sum);
-    //cout << "Point " << p.id << " is distantiated from cluster 0: " << min_dist << endl;
+    //cout << "Point " << p.id << " is distantiated from cluster at position 0: " << min_dist << endl;
 
     //Compute the distance from others clusters
-    for(int k = 1; k < K; k++){
+    for (int k = 1; k < K; k++) {
 
         double dist;
         sum = 0.0;
 
-        for(int i = 0; i < total_values; i++){
-            sum += pow( clusters[k].values[i] - p.values[i], 2.0);
+        for (int i = 0; i < total_values; i++) {
+            sum += pow(clusters[k].values[i] - p.values[i], 2.0);
         }
 
         dist = sqrt(sum);
-        //cout << "Point " << p.id << " is distantiated from cluster " << k << ": " << dist << endl;
+        //cout << "Point " << p.id << " is distantiated from cluster at position " << k << ": " << dist << endl;
 
-        if(dist < min_dist){
+        if (dist < min_dist) {
             min_dist = dist;
             idCluster = k;
         }
     }
 
+    //cout << "Point " << p.id << " is in cluster at position " << idCluster << ". The id of that cluster is " << clusters[idCluster].id << endl;
+
     return idCluster;
 }
 
 
+/*
 void func(Punto *in, Punto *inout, int *len, const MPI_Datatype *dptr) {
-    /*params:
-     *      len: corresponds to the dimension of each point (so must be equal to total_values)
-     */
-    int i = 0;
-    //int size = in->size();
-    vector<Punto> results;
+    cout << "Entrato dentro func" << endl;
 
-    //for(int i = 0; i < size; i++){
-    while(in != NULL){
-        for(int j = 0; j < *len; j++){
-            results[i].values[j] = in->values[j] + inout->values[j];
-        }
-        results[i].id = in->id;
-        i++;
+    //vector<Punto> results;
+    //results.resize(*len);
+
+
+    for (int i = 0; i < *len; i++) {
+        cout << "In func, the point id is " << (*in).id << endl;
+        in++;
     }
-    inout = results.data();
 }
+*/
 
-void Node::run(){
+
+
+void Node::run() {
 
     localSum.resize(K);
 
-    for(int i = 0; i < localDataset.size(); i++){
+    int memCounter[K];
+    for (int k = 0; k < K; k++) {
+        memCounter[k] = 0;
+    }
+    int resMemCounter[K];
+
+    for (int i = 0; i < localDataset.size(); i++) {
 
         int old_mem = memberships[i];
         int new_mem = getIdNearestCluster(localDataset[i]);
 
-        if(old_mem == -1){
+        if (old_mem == -1) {
             memberships[i] = new_mem;
-        }
-        else if( new_mem < old_mem){
+            memCounter[new_mem] += 1;
+        } else if (new_mem < old_mem) {
             memberships[i] = new_mem;
+            memCounter[new_mem] += 1;
         }
 
-        for(int j = 0; j < total_values; j++){
-            localSum[memberships[i]].values[j] += localDataset[i].values[j];
+        if (rank == 0) {
+
+            cout << "In Node " << rank << " point " << localDataset[i].id << " belongs to cluster at position "
+                 << memberships[i] << ". The cluster id is " << clusters[memberships[i]].id << endl;
         }
-
-        cout << "In Node " << rank << " the localSum of cluster  " << clusters[i].id << " has values  0" << " equal to " << localSum[i].values[0] << endl;
-
-
     }
 
+    MPI_Allreduce(memCounter, resMemCounter, K, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    for(int k = 0; k < K; k++) {
+        cout << "After ALL_REDUCE, in Node " << rank << " the resMemCounter at position " << k << " is "
+             << resMemCounter[k] << endl;
+    }
+    updateLocalSum();
 
     /*To recalculate cluster centroids, we sum locally the points (values-to-values) which belong to a cluster.
      * The result will be a point with values equal to that sum. This point is sent (with AllReduce) to each
-     * node by each node with AllReduce which computes the sum of each value-to-value among all sent points.*/
+     * node by each node with AllReduce which computes the sum of each value-to-value among all sent points.
+     */
+
+    //double* reduceArr;
+    //reduceArr = serializePointValues(localSum);
+
+    double reduceArr[K * total_values];
+    double results[K * total_values];
+
+
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < total_values; j++) {
+            reduceArr[i * total_values + j] = localSum[i].values[j];
+        }
+    }
+
+    MPI_Allreduce(reduceArr, results, K * total_values, MPI_DOUBLE, MPI_SUM,
+                  MPI_COMM_WORLD);    //Così funziona ma può essere un problema quando si ha tanti cluster e punti di grandi dimensioni
+
+    /*
 
     MPI_Op myOp;
     MPI_Op_create((MPI_User_function*)func, true, &myOp);
 
-    MPI_Allreduce(localSum.data(), localSum.data(), total_values, pointType, myOp, MPI_COMM_WORLD);     //TODO fix this
+    MPI_Allreduce(localSum.data(), results.data(), K, pointType, myOp, MPI_COMM_WORLD);  //TODO fix this
+    */
+    for (int i = 0; i < K; i++) {
+        cout << "After MPI_Allreduce, In Node " << rank << " the localSum of cluster  " << clusters[i].id
+             << " has values 0 equal to " << results[i * total_values] << "\n" << endl;
+    }
 
-
-    if(rank == 0){
-        for(int i = 0; i < K; i++){
-            cout << "After MPI_Allreduce, In Node " << rank << " the localSum of cluster  " << clusters[i].id << " has values 0 " << " equal to " << localSum[i].values[0] << endl;
-
+    for(int k = 0; k < K; k++){
+        for(int i = 0; i < total_values; i++){
+            results[k * total_values + i] /= resMemCounter[k];
+            clusters[k].values[i] = results[k * total_values + i];
         }
+
+        cout << "After the division, In Node " << rank << " the results of cluster in position " << k
+             << " has values 0 equal to " << results[k * total_values] << ". The cluster at position "  <<
+              k << " with id " << clusters[k].id << " has first values = " << clusters[k].values[0] << endl;
     }
 
 }
 
 
+void Node::updateLocalSum() {
+    for (int i = 0; i < localDataset.size(); i++) {
+        for (int j = 0; j < total_values; j++) {
+            localSum[memberships[i]].values[j] += localDataset[i].values[j];
+        }
+        //cout << "In Node " << rank << " point " << localDataset[i].id << " belongs to cluster at position " << memberships[i] << ". The cluster id is " << clusters[memberships[i]].id << endl;
+    }
+
+
+    //Questo for non serve a niente
+    for (int k = 0; k < localDataset.size(); k++) {
+        int m = memberships[k];
+
+        /*
+        cout << "Get the membership of point " << localDataset[k].id << ": " << m <<
+             endl;
+
+        cout << "Old localSum in position " << memberships[k] << " : " << localSum[m].values[0] <<
+             endl;
+
+        cout << "New localSum in position " << memberships[k] << " : " << localSum[m].values[0] <<
+             endl;
+             */
+
+        cout << "In Node " << rank << " the final localSum of cluster  " << clusters[k].id << " has values 0"
+             << " equal to " << localSum[k].values[0] << endl;
+    }
+
+}
+
+
+/*Per la global membership possiamo mettere il numero di appartenenza del cluster alla posizione p.id
+ * del vettore globalMembership*/
+
+
+
+double *Node::serializePointValues(vector<Punto> v) {
+    double serializedValues[K * total_values];
+
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < total_values; j++) {
+            serializedValues[i * total_values + j] = v[i].values[j];
+        }
+    }
+    return serializedValues;
+}
+
+void Node::deserializePointValues(double *values) {
+}
 
 
 

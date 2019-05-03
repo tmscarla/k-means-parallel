@@ -12,6 +12,7 @@ using namespace std;
 struct Punto {
     double values[MAX_DIM];
     int id;
+    int size;
 };
 
 #endif //KMEANSCLUSTERING_POINT_H

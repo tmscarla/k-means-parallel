@@ -43,6 +43,9 @@ public:
     int getIdNearestCluster(Punto p);
     //void distributedPointSum(vector<Punto> *in, vector<Punto> *inout, int* len, MPI_Datatype* dptr);
     void run();
+    void updateLocalSum();
+    double* serializePointValues(vector<Punto> v);
+    void deserializePointValues(double* values);
 };
 
 
