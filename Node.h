@@ -26,6 +26,8 @@ private:
     int num_local_points;
     int K, max_iterations;
 
+    int* memCounter;        //Membership count
+
     vector<Punto> dataset;
     vector<Punto> localDataset;
     vector<Punto> clusters;
@@ -42,7 +44,7 @@ public:
     void extractCluster();
     int getIdNearestCluster(Punto p);
     //void distributedPointSum(vector<Punto> *in, vector<Punto> *inout, int* len, MPI_Datatype* dptr);
-    void run();
+    bool run(int it);
     void updateLocalSum();
     double* serializePointValues(vector<Punto> v);
     void deserializePointValues(double* values);

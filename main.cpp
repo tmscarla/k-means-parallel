@@ -41,8 +41,15 @@ int main(int argc, char *argv[]) {
     node.readDataset();
     node.scatterDataset();
     node.extractCluster();
-    node.run();
+    for (int it = 0; it < 5; it++) {
+        cout << "Iteration " << it << " starts!" << endl;
+        bool isChanged = node.run(it);
+        cout << "Iteration " << it << " ends!" << endl;
 
+        if(isChanged){
+            break;
+        }
+    }
 
     MPI_Finalize();
     //Un punto è un array di valori double. Leggere prima la dimensione di ciascun punto, poi creare i punti

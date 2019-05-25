@@ -149,8 +149,8 @@ void Node::scatterDataset() {
 
 void Node::extractCluster() {
 
-    /* To extract initially the clusters, we choose randomly K point of the dataset. This action is performed
-     * by the Node 0, who sends them to other nodes in broadast. Ids of clusters are the same of their initial centroid point  */
+    /* Initially to extract the clusters, we choose randomly K point of the dataset. This action is performed
+     * by the Node 0, who sends them to other nodes in broadcast. Ids of clusters are the same of their initial centroid point  */
 
     if (rank == 0) {
         if (K >= dataset.size()) {
@@ -268,15 +268,26 @@ void func(Punto *in, Punto *inout, int *len, const MPI_Datatype *dptr) {
 
 
 
-void Node::run() {
+bool Node::run(int it) {
 
+    //for (int it = 0; it < max_iterations; it++) {
+    //cout << "Node " << rank << " starts iteration " << it << endl;
     localSum.resize(K);
 
-    int memCounter[K];
-    for (int k = 0; k < K; k++) {
-        memCounter[k] = 0;
-    }
     int resMemCounter[K];
+
+    bool isChanged = true;   //Serve a stabilire se durante un run ci sono stati cambiamenti di appartenenza ad un cluster.
+                            // Se non ci sono stati e it < max iterations, allora l'algoritmo ha raggiunto la configurazione ottima
+
+    if (it == 0) {
+        // memCounter va inizializzato alla prima iterazione del ciclo. Successivamente va solo modificato in modo che se
+        // un punto cambia cluster di appartenenza, counter del numero di punti nel cluster vecchio viene decrementato, quello
+        // nuovo invece viene incrementato.
+        memCounter = new int[K];
+        for (int k = 0; k < K; k++) {
+            memCounter[k] = 0;
+        }
+    }
 
     for (int i = 0; i < localDataset.size(); i++) {
 
@@ -286,9 +297,12 @@ void Node::run() {
         if (old_mem == -1) {
             memberships[i] = new_mem;
             memCounter[new_mem] += 1;
+            isChanged = false;
         } else if (new_mem < old_mem) {
             memberships[i] = new_mem;
+            memCounter[old_mem] -= 1;
             memCounter[new_mem] += 1;
+            isChanged = false;
         }
 
         if (rank == 0) {
@@ -298,11 +312,26 @@ void Node::run() {
         }
     }
 
-    MPI_Allreduce(memCounter, resMemCounter, K, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    // Reset of resMemCounter at each iteration
+    for(int k = 0; k < K; k++){
+        resMemCounter[k] = 0;
+    }
 
-    for(int k = 0; k < K; k++) {
+    for (int k = 0; k < K; k++) {
+        cout << "Before ALL_REDUCE, in Node " << rank << " the MemCounter at position " << k << " is "
+             << memCounter[k] << endl;
+    }
+
+    MPI_Allreduce(memCounter, resMemCounter, K, MPI_INT, MPI_SUM,
+                  MPI_COMM_WORLD);  //In questo modo si ottiene il numero dei punti che appartengono a ciascun cluster
+
+    for (int k = 0; k < K; k++) {
         cout << "After ALL_REDUCE, in Node " << rank << " the resMemCounter at position " << k << " is "
              << resMemCounter[k] << endl;
+    }
+    for (int k = 0; k < K; k++) {
+        cout << "After ALL_REDUCE, in Node " << rank << " the MemCounter at position " << k << " is "
+             << memCounter[k] << endl;
     }
     updateLocalSum();
 
@@ -313,6 +342,9 @@ void Node::run() {
 
     //double* reduceArr;
     //reduceArr = serializePointValues(localSum);
+
+    //Since AllReduce doesn't support operations with vector, we need to serialize the vector into an array (reduceArr)
+    // and once AllReduce is done, we need to re-arrange the array obtained into a vector of Point
 
     double reduceArr[K * total_values];
     double results[K * total_values];
@@ -334,22 +366,27 @@ void Node::run() {
 
     MPI_Allreduce(localSum.data(), results.data(), K, pointType, myOp, MPI_COMM_WORLD);  //TODO fix this
     */
+
     for (int i = 0; i < K; i++) {
         cout << "After MPI_Allreduce, In Node " << rank << " the localSum of cluster  " << clusters[i].id
              << " has values 0 equal to " << results[i * total_values] << "\n" << endl;
     }
 
-    for(int k = 0; k < K; k++){
-        for(int i = 0; i < total_values; i++){
+    for (int k = 0; k < K; k++) {
+        for (int i = 0; i < total_values; i++) {
             results[k * total_values + i] /= resMemCounter[k];
             clusters[k].values[i] = results[k * total_values + i];
         }
 
         cout << "After the division, In Node " << rank << " the results of cluster in position " << k
-             << " has values 0 equal to " << results[k * total_values] << ". The cluster at position "  <<
-              k << " with id " << clusters[k].id << " has first values = " << clusters[k].values[0] << endl;
+             << " has values 0 equal to " << results[k * total_values] << ". The cluster at position " <<
+             k << " with id " << clusters[k].id << " has first values = " << clusters[k].values[0] << endl;
     }
 
+    //cout << "Node " << rank << " ends iteration " << it << endl;
+    //MPI_Barrier(MPI_COMM_WORLD);
+    //}
+    return isChanged;
 }
 
 
@@ -385,7 +422,8 @@ void Node::updateLocalSum() {
 
 
 /*Per la global membership possiamo mettere il numero di appartenenza del cluster alla posizione p.id
- * del vettore globalMembership*/
+ * del vettore globalMembership.
+ * Implementare le iterazioni e quando fermarsi prima che le iterazioni siano finite*/
 
 
 
