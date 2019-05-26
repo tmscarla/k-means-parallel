@@ -92,7 +92,7 @@ void Node::scatterDataset() {
     int datasetDisp[numNodes];
 
     if (rank == 0) {
-        int numPoints = dataset.size(); //forse è di tipo unsigned long
+        numPoints = dataset.size(); //forse è di tipo unsigned long
         cout << "Total points: " << numPoints << endl;
 
         int partial = numPoints / numNodes;
@@ -144,6 +144,9 @@ void Node::scatterDataset() {
     for (int i = 0; i < num_local_points; i++) {
         memberships[i] = -1;
     }
+
+    MPI_Bcast(&numPoints, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
 }
 
 
@@ -360,7 +363,6 @@ bool Node::run(int it) {
                   MPI_COMM_WORLD);    //Così funziona ma può essere un problema quando si ha tanti cluster e punti di grandi dimensioni
 
     /*
-
     MPI_Op myOp;
     MPI_Op_create((MPI_User_function*)func, true, &myOp);
 
@@ -426,22 +428,43 @@ void Node::updateLocalSum() {
  * Implementare le iterazioni e quando fermarsi prima che le iterazioni siano finite*/
 
 
+void Node::computeGlobalMembership(){
 
-double *Node::serializePointValues(vector<Punto> v) {
-    double serializedValues[K * total_values];
 
-    for (int i = 0; i < K; i++) {
-        for (int j = 0; j < total_values; j++) {
-            serializedValues[i * total_values + j] = v[i].values[j];
+    globalMembership = new int[numPoints];
+    int localMem[numPoints];
+    int globalMember[numPoints];
+    for(int i = 0; i < numPoints; i++){
+        globalMember[i] = 0;
+        localMem[i] = 0;
+    }
+
+    for(int i = 0; i < num_local_points; i++){
+        int p_id = localDataset[i].id;
+        int c_id = memberships[i];
+        localMem[p_id] = c_id;
+
+        cout << "In Node " << rank << " point " << p_id << " belongs to cluster " << c_id << endl;
+    }
+
+    MPI_Reduce(&localMem, &globalMember , numPoints, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if(rank == 0 ) {
+        for (int j = 0; j < numPoints; j++) {
+            cout << "Point " << j << " belongs to cluster " << globalMember[j] << endl;
+            globalMembership[j] = globalMember[j];
         }
     }
-    return serializedValues;
+
+
 }
 
-void Node::deserializePointValues(double *values) {
+int* Node::getGlobalMemberships() {
+    return globalMembership;
 }
 
-
-
+int Node::getNumPoints() {
+    return numPoints;
+}
 
 

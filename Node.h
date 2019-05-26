@@ -25,6 +25,8 @@ private:
     int total_values;
     int num_local_points;
     int K, max_iterations;
+    int numPoints;  //Total number of points in the whole dataset
+
 
     int* memCounter;        //Membership count
 
@@ -36,6 +38,7 @@ private:
     vector<int> memberships; //This vector has same length as localDataset: for each point in localDataset is
                             // associated the id of nearest cluster in the corresponding position in membership
     //TODO gestire anche la globalMembership
+    int* globalMembership;
 
 public:
     Node(int rank, MPI_Comm comm = MPI_COMM_WORLD);
@@ -48,6 +51,10 @@ public:
     void updateLocalSum();
     double* serializePointValues(vector<Punto> v);
     void deserializePointValues(double* values);
+
+    void computeGlobalMembership();
+    int getNumPoints();
+    int* getGlobalMemberships();
 };
 
 
