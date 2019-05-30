@@ -5,7 +5,7 @@
 #ifndef KMEANSCLUSTERING_POINT_H
 #define KMEANSCLUSTERING_POINT_H
 
-#define MAX_DIM 25
+#define MAX_DIM 100
 
 using namespace std;
 

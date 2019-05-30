@@ -10,7 +10,7 @@
 #include <sstream>
 
 
-#define MAX_DIM 25
+#define MAX_DIM 100
 
 using namespace std;
 
@@ -21,7 +21,7 @@ using namespace std;
 int main(int argc, char *argv[]) {
     srand(time(NULL));
 
-    int numNodes, rank, sendcount, recvcount, source;
+    int numNodes, rank;
     const int tag = 13;
 
     MPI_Init(&argc, &argv);
@@ -41,14 +41,20 @@ int main(int argc, char *argv[]) {
     node.readDataset();
     node.scatterDataset();
     node.extractCluster();
-    for (int it = 0; it < 5; it++) {
+    for (int it = 0; it < 10; it++) {
         cout << "Iteration " << it << " starts!" << endl;
-        bool isChanged = node.run(it);
+        int notChanged = node.run(it);
         cout << "Iteration " << it << " ends!" << endl;
 
-        if(isChanged){
+        if(rank == 0){
+            cout << "Global not changed = " << notChanged << ". NumNodes = " << numNodes << endl;
+        }
+
+        if(notChanged == numNodes){
+            cout << "No more changes, k-means terminates at iteration " << it << endl;
             break;
         }
+
     }
 
     cout << "Get the memberships!!! " << endl;
@@ -57,9 +63,11 @@ int main(int argc, char *argv[]) {
         int* gm;
         gm = node.getGlobalMemberships();
         int numPoints = node.getNumPoints();
-        for(int i = 0; i < numPoints; i++){
+        /*for(int i = 0; i < numPoints; i++){
             cout << "Point " << i << " belongs to cluster " << gm[i] << endl;
-        }
+        }*/
+
+        node.printClusters();
     }
 
 

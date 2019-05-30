@@ -27,6 +27,8 @@ private:
     int K, max_iterations;
     int numPoints;  //Total number of points in the whole dataset
 
+    int notChanged;   //Serve a stabilire se durante un run ci sono stati cambiamenti di appartenenza ad un cluster.
+                        // Se non ci sono stati e it < max iterations, allora l'algoritmo ha raggiunto la configurazione ottima
 
     int* memCounter;        //Membership count
 
@@ -37,7 +39,6 @@ private:
     int numPointsPerNode;
     vector<int> memberships; //This vector has same length as localDataset: for each point in localDataset is
                             // associated the id of nearest cluster in the corresponding position in membership
-    //TODO gestire anche la globalMembership
     int* globalMembership;
 
 public:
@@ -46,15 +47,12 @@ public:
     void scatterDataset();
     void extractCluster();
     int getIdNearestCluster(Punto p);
-    //void distributedPointSum(vector<Punto> *in, vector<Punto> *inout, int* len, MPI_Datatype* dptr);
-    bool run(int it);
+    int run(int it);
     void updateLocalSum();
-    double* serializePointValues(vector<Punto> v);
-    void deserializePointValues(double* values);
-
     void computeGlobalMembership();
     int getNumPoints();
     int* getGlobalMemberships();
+    void printClusters();
 };
 
 
