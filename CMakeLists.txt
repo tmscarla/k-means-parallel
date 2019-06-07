@@ -3,7 +3,7 @@ project(KMeansClustering)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(KMeansClustering main.cpp Point.h main_2.cpp Node.cpp Node.h)
+add_executable(KMeansClustering main.cpp Point.h Node.cpp Node.h)
 
 find_package(OpenMP REQUIRED)
 if(NOT TARGET OpenMP::OpenMP_CXX)
