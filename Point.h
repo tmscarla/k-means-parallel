@@ -9,7 +9,7 @@
 
 using namespace std;
 
-struct Punto {
+struct Point {
     double values[MAX_DIM];
     int id;
     int size;

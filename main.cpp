@@ -28,19 +28,25 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &numNodes);
 
-    cout << "I'm rank: " << rank << endl;
+    //cout << "I'm rank: " << rank << endl;
 
     int total_values;
     int total_points;
     int K, max_iterations;
-    vector<Punto> dataset;
+    vector<Point> dataset;
+    string outFilename = "membershipsFilename";
 
-    double start = MPI_Wtime();
+    if(rank == 0) {
+        cout << "Specify output filename: \n";
+        getline(cin, outFilename);
+    }
 
     Node node(rank, MPI_COMM_WORLD);
 
-    //string path = "twitter_points_20 copiaridotta.csv";
     node.readDataset();
+
+    double start = MPI_Wtime();
+
     node.scatterDataset();
     node.extractCluster();
     for (int it = 0; it < node.getMaxIterations(); it++) {
@@ -49,17 +55,19 @@ int main(int argc, char *argv[]) {
         cout << "Iteration " << it << " ends!" << endl;
 
         if(rank == 0){
-            cout << "Global not changed = " << notChanged << ". NumNodes = " << numNodes << endl;
+            //cout << "Global not changed = " << notChanged << ". NumNodes = " << numNodes << endl;
         }
 
         if(notChanged == numNodes){
-            cout << "No more changes, k-means terminates at iteration " << it << endl;
+            //cout << "No more changes, k-means terminates at iteration " << it << endl;
             break;
         }
 
     }
 
-    cout << "Get the memberships!!! " << endl;
+    double end = MPI_Wtime();
+
+    //cout << "Get the memberships!!! " << endl;
     node.computeGlobalMembership();
     if(rank == 0){
         int* gm;
@@ -70,12 +78,16 @@ int main(int argc, char *argv[]) {
         }*/
 
         //node.printClusters();
-        node.writeClusterMembership();
+        node.writeClusterMembership(outFilename);
     }
 
-    double end = MPI_Wtime();
+    node.getStatistics();
 
-    cout << "The program tooks : " << end - start << " to run" << endl;
+    //cout << "\nThe program in rank " << rank << " tooks : " << end - start << " to run" << endl;
+    /*Do all your I/O with cout in the process with rank 0. If you want to output some data from other processes,
+     * just send MPI message with this data to rank 0.*/
+
+
 
     MPI_Finalize();
 

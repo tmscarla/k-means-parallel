@@ -32,14 +32,15 @@ private:
 
     int* memCounter;        //Membership count
 
-    vector<Punto> dataset;
-    vector<Punto> localDataset;
-    vector<Punto> clusters;
-    vector<Punto> localSum;
+    vector<Point> dataset;
+    vector<Point> localDataset;
+    vector<Point> clusters;
+    vector<Point> localSum;
     int numPointsPerNode;
     vector<int> memberships; //This vector has same length as localDataset: for each point in localDataset is
                             // associated the id of nearest cluster in the corresponding position in membership
     int* globalMembership;
+    double total_time;
 
 public:
     Node(int rank, MPI_Comm comm = MPI_COMM_WORLD);
@@ -47,14 +48,17 @@ public:
     void readDataset();
     void scatterDataset();
     void extractCluster();
-    int getIdNearestCluster(Punto p); //private
+    int getIdNearestCluster(Point p); //private
     int run(int it);
     void updateLocalSum();  //private
     void computeGlobalMembership();
     int getNumPoints();
     int* getGlobalMemberships();
     void printClusters();
-    void writeClusterMembership();
+    void writeClusterMembership(string filename);
+
+    void getStatistics();
+    void printStatistics();
 
 };
 
