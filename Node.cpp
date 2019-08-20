@@ -3,6 +3,8 @@
 //
 
 #include <mpi.h>
+//#include "/usr/local/opt/libomp/include/omp.h"
+#include <omp.h>
 #include <iostream>
 #include <algorithm>
 #include <vector>
@@ -11,6 +13,8 @@
 #include <sstream>
 #include <math.h>
 #include "Node.h"
+
+//t= omp_get_wtime();
 
 Node::Node(int rank, MPI_Comm comm) : rank(rank), comm(comm), notChanged(1) {
 
@@ -29,7 +33,7 @@ void Node::readDataset() {
     if (rank == 0) {
 
         // READ DATASET
-        ifstream infile("data/iris_1.csv");
+        ifstream infile("data/tweets_points_100.csv");
         string line;
         cout << "Reading file.." << endl;
 
@@ -114,18 +118,18 @@ void Node::scatterDataset() {
         }
     }
 
-    MPI_Scatter(pointsPerNode, 1, MPI_INT, &num_local_points, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Scatter(pointsPerNode, 1, MPI_INT, &num_local_points, 1, MPI_INT, 0, comm);
 
     cout << "Node " << rank << " has num of points equal to " << num_local_points << "\n" << endl;
 
     localDataset.resize(num_local_points);
 
     MPI_Scatterv(dataset.data(), pointsPerNode, datasetDisp, pointType, localDataset.data(), num_local_points,
-                 pointType, 0, MPI_COMM_WORLD);
+                 pointType, 0, comm);
 
 
     //Send the dimension of points to each node
-    MPI_Bcast(&total_values, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&total_values, 1, MPI_INT, 0, comm);
 
     memberships.resize(num_local_points);
 
@@ -133,7 +137,8 @@ void Node::scatterDataset() {
         memberships[i] = -1;
     }
 
-    MPI_Bcast(&numPoints, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&numPoints, 1, MPI_INT, 0, comm);
+    MPI_Bcast(&max_iterations, 1, MPI_INT, 0, comm);
 
 }
 
@@ -153,7 +158,7 @@ void Node::extractCluster() {
         vector<int> prohibitedIndices;
 
         for (int i = 0; i < K; i++) {
-            while (true) {            //TODO fix double loop
+            while (true) {
                 int randIndex = rand() % dataset.size();
 
                 if (find(prohibitedIndices.begin(), prohibitedIndices.end(), randIndex) == prohibitedIndices.end()) {
@@ -165,15 +170,10 @@ void Node::extractCluster() {
         }
 
         //Take points which refer to clusterIndices and send them in broadcast to all Nodes
-
-        /* C++11 extension
-        for(auto&& x: clusterIndices){      //packed range-based for loop  (https://www.quora.com/How-do-I-iterate-through-a-vector-using-for-loop-in-C++)
-            clusters.push_back(dataset[x]);
-        }
-         */
-
         for(int i = 0; i < clusterIndices.size(); i++) {
-            clusters.push_back(dataset[clusterIndices[i]]);
+            //clusters.push_back(dataset[clusterIndices[i]]);
+            clusters.push_back(dataset[i]); //TODO delete this line, Adding random selection (line above)
+
         }
 
 
@@ -187,12 +187,12 @@ void Node::extractCluster() {
     }
 
     //Send the number of clusters in broadcast
-    MPI_Bcast(&K, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&K, 1, MPI_INT, 0, comm);
 
     clusters.resize(K);
 
     //Send the clusters centroids values
-    MPI_Bcast(clusters.data(), K, pointType, 0, MPI_COMM_WORLD);
+    MPI_Bcast(clusters.data(), K, pointType, 0, comm);
 
 }
 
@@ -211,10 +211,6 @@ int Node::getIdNearestCluster(Punto p) {
 
     min_dist = sqrt(sum);
 
-    //if(p.id == 54){
-        //cout << "[0] Point " << p.id << " ha min_dist = " << min_dist << endl;
-    //}
-
     //Compute the distance from others clusters
     for (int k = 1; k < K; k++) {
 
@@ -227,44 +223,37 @@ int Node::getIdNearestCluster(Punto p) {
 
         dist = sqrt(sum);
 
-       // if(p.id == 54){
-            //cout << "Point " << p.id << " ha min_dist = " << min_dist << endl;
-            //cout << "Point " << p.id << " dista dal cluster in pos " << k << " di " << dist << endl;
-        //}
-
         if (dist < min_dist) {
-            //if(p.id == 54){
-                //cout << "Point " << p.id << " ha dist = " << dist << " < " << min_dist << " = min_dist" << endl;
-            //}
             min_dist = dist;
             idCluster = k;
 
         }
-    }
-    if(p.id == 54) {
-        //cout << "The nearest cluster is in pos " << idCluster << endl;
     }
     return idCluster;
 }
 
 
 int Node::run(int it) {
+    double t_i, t_f;
 
     notChanged = 1;
     localSum.resize(K);
 
     int resMemCounter[K];
 
+    // Reset of resMemCounter at each iteration
+    fill_n(resMemCounter, K, 0);
+
     if (it == 0) {
         // memCounter va inizializzato alla prima iterazione del ciclo. Successivamente va solo modificato in modo che se
         // un punto cambia cluster di appartenenza, counter del numero di punti nel cluster vecchio viene decrementato, quello
         // nuovo invece viene incrementato.
-        memCounter = new int[K];
-        for (int k = 0; k < K; k++) {
-            memCounter[k] = 0;
-        }
+        memCounter = new int[K] ();
     }
 
+    //TODO OpenMP to take idNearestCluster of a point
+    t_i = omp_get_wtime();
+    #pragma omp parallel for shared(memCounter) num_threads(4)
     for (int i = 0; i < localDataset.size(); i++) {
 
         int old_mem = memberships[i];
@@ -272,32 +261,26 @@ int Node::run(int it) {
 
         if(new_mem != old_mem){
             memberships[i] = new_mem;
-            memCounter[new_mem] += 1;
+
+            //critical section : memCounter is a vector and for each iteration we update at most two elements. For those element we
+            // need to guaratee the atomicity of the operation, but that lock must not block the access of other processes to
+            // other array elements.
+            // using atomic pragma resolves our issue: https://stackoverflow.com/questions/17553282/how-to-lock-element-of-array-using-tbb-openmp
+            #pragma omp atomic update
+            memCounter[new_mem]++;
             if(old_mem != -1){
-                memCounter[old_mem] -= 1;
+                #pragma omp atomic update
+                memCounter[old_mem]--;
             }
+
             notChanged = 0;
         }
-
-        /*
-        if (rank == 0) {
-            cout << "In Node " << rank << " point " << localDataset[i].id << " belongs to cluster at position "
-                 << memberships[i] << ". The cluster id is " << clusters[memberships[i]].id << endl;
-        }
-         */
     }
+    t_f = omp_get_wtime();
+    //cout << "OMP time to update : " << t_f - t_i << endl;
 
-    // Reset of resMemCounter at each iteration
-    for (int k = 0; k < K; k++) {
-        resMemCounter[k] = 0;
-    }
 
-    MPI_Allreduce(memCounter, resMemCounter, K, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  //In questo modo si ottiene il numero dei punti che appartengono a ciascun cluster
-    /*
-    for (int i = 0; i < K; i++) {
-        cout << "Cluster at position " << i << " contains " << resMemCounter[i] << " points" << endl;
-    }
-    */
+    MPI_Allreduce(memCounter, resMemCounter, K, MPI_INT, MPI_SUM, comm);  // We obtain the number of points that belong to each cluster
     updateLocalSum();
 
     /*To recalculate cluster centroids, we sum locally the points (values-to-values) which belong to a cluster.
@@ -307,26 +290,24 @@ int Node::run(int it) {
 
     //Since AllReduce doesn't support operations with vector, we need to serialize the vector into an array (reduceArr)
     // and once AllReduce is done, we need to re-arrange the array obtained into a vector of Point
-
     double reduceArr[K * total_values];
-    double results[K * total_values];
+    double reduceResults[K * total_values];
 
-
+    t_i = omp_get_wtime();
+    #pragma omp parallel for num_threads(4)   //Questo forse rallenta
     for (int i = 0; i < K; i++) {
         for (int j = 0; j < total_values; j++) {
             reduceArr[i * total_values + j] = localSum[i].values[j];
         }
     }
 
-    MPI_Allreduce(reduceArr, results, K * total_values, MPI_DOUBLE, MPI_SUM,
-                  MPI_COMM_WORLD);
-    /*
-    for (int i = 0; i < K; i++) {
+    t_f = omp_get_wtime();
+    //cout << "OMP time to reduceArr : " << t_f - t_i << endl;
 
-        cout << "After MPI_Allreduce, In Node " << rank << " the localSum of cluster  " << clusters[i].id
-             << " has values 0 equal to " << results[i * total_values] << "\n" << endl;
 
-    }*/
+
+    MPI_Allreduce(reduceArr, reduceResults, K * total_values, MPI_DOUBLE, MPI_SUM,
+                  comm);
 
     for (int k = 0; k < K; k++) {
         if(rank == 0) {
@@ -334,30 +315,19 @@ int Node::run(int it) {
         }
         for (int i = 0; i < total_values; i++) {
             if(rank == 0) {
-                //cout << results[k * total_values + i] << "-->";
+                //cout << reduceResults[k * total_values + i] << "-->";
             }
             if(resMemCounter[k] != 0) {
-                results[k * total_values +
+                reduceResults[k * total_values +
                         i] /= resMemCounter[k];
-                clusters[k].values[i] = results[k * total_values + i];
+                clusters[k].values[i] = reduceResults[k * total_values + i];
             }else{
-                results[k * total_values +
+                reduceResults[k * total_values +
                         i] /= 1;
-                clusters[k].values[i] = results[k * total_values + i];
-            }
-            if(rank == 0) {
-                //cout << results[k * total_values + i] << endl;
+                clusters[k].values[i] = reduceResults[k * total_values + i];
             }
         }
-        /*
-        cout << "After the division, In Node " << rank << " the results of cluster in position " << k
-             << " has values 0 equal to " << results[k * total_values] << ". The cluster at position " <<
-             k << " with id " << clusters[k].id << " has first values = " << clusters[k].values[0] << endl;
-             */
     }
-
-
-    MPI_Barrier(MPI_COMM_WORLD);
 
     int globalNotChanged;
 
@@ -365,65 +335,56 @@ int Node::run(int it) {
      * w.r.t. preceding iteration. In order to reach this goal, we set a variable [notChanged] to 1 if no point changes its
      * membership, 0 otherwise. Then with All_Reduce all Nodes know how many nodes [globalNotChanged] have their points unchanged and if
      * if that number is equal to the number of processes it means that all points have not changed their memberships*/
-    MPI_Allreduce(&notChanged, &globalNotChanged, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&notChanged, &globalNotChanged, 1, MPI_INT, MPI_SUM, comm);
     return globalNotChanged;
 }
 
 
 void Node::updateLocalSum() {
     //reset LocalSum at each iteration
-    for(int k = 0; k < localDataset.size(); k++){
+    for(int k = 0; k < K; k++){
         for(int j = 0; j < total_values; j++){
             localSum[k].values[j] = 0;
         }
     }
 
+    //TODO reduction on localSum
+    double ti = omp_get_wtime();
     for (int i = 0; i < localDataset.size(); i++) {
-        if(rank == 0){
-            cout << "Point " << localDataset[i].id << " has values: " ;
-        }
         for (int j = 0; j < total_values; j++) {
-            if(rank == 0){
-                cout << localDataset[i].values[j] << " , ";
-            }
             localSum[memberships[i]].values[j] += localDataset[i].values[j];
         }
-        if(rank == 0) {
-            cout << "\nLocalSum at position " << memberships[i] << " : " ;
-            for (int f = 0; f < total_values; f++) {
-                cout << localSum[memberships[i]].values[f] << " , ";
-            }
-        }
-        cout << "\n" << endl;
-        //cout << "In Node " << rank << " point " << localDataset[i].id << " belongs to cluster at position " << memberships[i] << ". The cluster id is " << clusters[memberships[i]].id << endl;
     }
+
+    double tf = omp_get_wtime();
+    //cout << "Update local sum time : " << tf - ti << endl;
 }
 
 void Node::computeGlobalMembership() {
 
-
     globalMembership = new int[numPoints];
+
     int localMem[numPoints];
     int globalMember[numPoints];
-    for (int i = 0; i < numPoints; i++) {
+    /*for (int i = 0; i < numPoints; i++) {
         globalMember[i] = 0;
         localMem[i] = 0;
-    }
+    }*/
+    fill_n(localMem, numPoints, 0);
+    fill_n(globalMember, numPoints, 0);
+
 
     for (int i = 0; i < num_local_points; i++) {
         int p_id = localDataset[i].id;
         int c_id = memberships[i];
         localMem[p_id] = c_id;
-
-        //cout << "In Node " << rank << " point " << p_id << " belongs to cluster " << c_id << endl;
     }
 
 
-    MPI_Reduce(&localMem, &globalMember, numPoints, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&localMem, &globalMember, numPoints, MPI_INT, MPI_SUM, 0, comm);
 
     if (rank == 0) {
         for (int j = 0; j < numPoints; j++) {
-           // cout << "Point " << j << " belongs to cluster " << globalMember[j] << endl;
             globalMembership[j] = globalMember[j];
         }
     }
@@ -450,10 +411,19 @@ void Node::printClusters() {
                 count++;
             }
         }
-        //cout << "[printCluster] Cluster at position " << i << " contains " << count << " points" << endl;
-        //total += count;
     }
-    //cout << "Total number in cluster are: " << total << endl;
 }
 
+int Node::getMaxIterations(){
+    return max_iterations;
+}
 
+void Node::writeClusterMembership(){
+    ofstream myfile;
+    myfile.open("data/Memberships.csv");
+    myfile << "Point_id,Cluster_id" << "\n";
+    for(int p = 0; p < numPoints; p++){
+        myfile << dataset[p].id << "," << globalMembership[p] << "\n";
+    }
+    myfile.close();
+}

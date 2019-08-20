@@ -43,16 +43,19 @@ private:
 
 public:
     Node(int rank, MPI_Comm comm = MPI_COMM_WORLD);
+    int getMaxIterations();
     void readDataset();
     void scatterDataset();
     void extractCluster();
-    int getIdNearestCluster(Punto p);
+    int getIdNearestCluster(Punto p); //private
     int run(int it);
-    void updateLocalSum();
+    void updateLocalSum();  //private
     void computeGlobalMembership();
     int getNumPoints();
     int* getGlobalMemberships();
     void printClusters();
+    void writeClusterMembership();
+
 };
 
 

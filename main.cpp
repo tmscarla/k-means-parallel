@@ -35,13 +35,15 @@ int main(int argc, char *argv[]) {
     int K, max_iterations;
     vector<Punto> dataset;
 
+    double start = MPI_Wtime();
+
     Node node(rank, MPI_COMM_WORLD);
 
     //string path = "twitter_points_20 copiaridotta.csv";
     node.readDataset();
     node.scatterDataset();
     node.extractCluster();
-    for (int it = 0; it < 10; it++) {
+    for (int it = 0; it < node.getMaxIterations(); it++) {
         cout << "Iteration " << it << " starts!" << endl;
         int notChanged = node.run(it);
         cout << "Iteration " << it << " ends!" << endl;
@@ -67,12 +69,14 @@ int main(int argc, char *argv[]) {
             cout << "Point " << i << " belongs to cluster " << gm[i] << endl;
         }*/
 
-        node.printClusters();
+        //node.printClusters();
+        node.writeClusterMembership();
     }
 
+    double end = MPI_Wtime();
+
+    cout << "The program tooks : " << end - start << " to run" << endl;
 
     MPI_Finalize();
-    //Un punto è un array di valori double. Leggere prima la dimensione di ciascun punto, poi creare i punti
-    // come array con quella dimensione
 
 }
