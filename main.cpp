@@ -33,26 +33,20 @@ int main(int argc, char *argv[]) {
     int total_values;
     int total_points;
     int K, max_iterations;
+    int lastIteration;
     vector<Point> dataset;
-    string outFilename = "membershipsFilename";
-
-    if(rank == 0) {
-        cout << "Specify output filename: \n";
-        getline(cin, outFilename);
-    }
 
     Node node(rank, MPI_COMM_WORLD);
 
     node.readDataset();
 
-    double start = MPI_Wtime();
-
     node.scatterDataset();
     node.extractCluster();
+    lastIteration = 0;
     for (int it = 0; it < node.getMaxIterations(); it++) {
-        cout << "Iteration " << it << " starts!" << endl;
+        //cout << "Iteration " << it << " starts!" << endl;
         int notChanged = node.run(it);
-        cout << "Iteration " << it << " ends!" << endl;
+        //cout << "Iteration " << it << " ends!" << endl;
 
         if(rank == 0){
             //cout << "Global not changed = " << notChanged << ". NumNodes = " << numNodes << endl;
@@ -60,12 +54,13 @@ int main(int argc, char *argv[]) {
 
         if(notChanged == numNodes){
             //cout << "No more changes, k-means terminates at iteration " << it << endl;
+            lastIteration = it;
             break;
         }
-
+        lastIteration = it;
     }
 
-    double end = MPI_Wtime();
+    node.setLastIteration(lastIteration);
 
     //cout << "Get the memberships!!! " << endl;
     node.computeGlobalMembership();
@@ -78,12 +73,23 @@ int main(int argc, char *argv[]) {
         }*/
 
         //node.printClusters();
-        node.writeClusterMembership(outFilename);
+
+        string doWrite;
+        cout << "Do you want to save points membership? (y/n)" << endl;
+        getline(cin, doWrite);
+        if(doWrite == "y") {
+            string outFilename = "membershipsFilename";
+            cout << "Specify output filename: \n";
+            getline(cin, outFilename);
+
+            node.writeClusterMembership(outFilename);
+        }
     }
 
     node.getStatistics();
 
     //cout << "\nThe program in rank " << rank << " tooks : " << end - start << " to run" << endl;
+
     /*Do all your I/O with cout in the process with rank 0. If you want to output some data from other processes,
      * just send MPI message with this data to rank 0.*/
 

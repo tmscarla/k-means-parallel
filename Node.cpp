@@ -26,7 +26,20 @@ Node::Node(int rank, MPI_Comm comm) : rank(rank), comm(comm), notChanged(1) {
     MPI_Type_create_struct(3, blocksize, displ, blockType, &pointType);
     MPI_Type_commit(&pointType);
     total_time = 0;
+    lastIteration = 0;
+}
 
+double Node::squared_norm(Point p1, Point p2){
+    // This operation compute || p1 - p2 ||^2
+    double sum = 0.0;
+    for(int j = 0; j < total_values; j++){
+        sum += pow(p1.values[j] - p2.values[j], 2.0);
+    }
+    return sum;
+}
+
+void Node::setLastIteration(int lastIt) {
+    lastIteration = lastIt;
 }
 
 void Node::readDataset() {
@@ -286,11 +299,8 @@ int Node::getIdNearestCluster(Point p) {
     for (int k = 1; k < K; k++) {
 
         double dist;
-        sum = 0.0;
 
-        for (int i = 0; i < total_values; i++) {
-            sum += pow(clusters[k].values[i] - p.values[i], 2.0);
-        }
+        sum = squared_norm(clusters[k], p);
 
         dist = sqrt(sum);
 
@@ -324,8 +334,6 @@ int Node::run(int it) {
         memCounter = new int[K] ();
     }
 
-    //TODO OpenMP to take idNearestCluster of a point
-    t_i = omp_get_wtime();
     #pragma omp parallel for shared(memCounter) num_threads(4)
     for (int i = 0; i < localDataset.size(); i++) {
 
@@ -349,8 +357,6 @@ int Node::run(int it) {
             notChanged = 0;
         }
     }
-    t_f = omp_get_wtime();
-    //cout << "OMP time to update : " << t_f - t_i << endl;
 
 
     MPI_Allreduce(memCounter, resMemCounter, K, MPI_INT, MPI_SUM, comm);  // We obtain the number of points that belong to each cluster
@@ -502,6 +508,55 @@ void Node::writeClusterMembership(string filename){
     myfile.close();
 }
 
+vector<double> Node::SSW() {
+    //Standard Deviation of the sum of squares within each cluster
+    vector<double> ssws;
+    double ssw = 0.0;
+
+    for (int k = 0; k < K; k++) {
+
+        double dist;
+        double sum;
+        for (int j = 0; j < numPoints; j++) {
+            if (k == globalMembership[j]) {
+
+                sum = squared_norm(dataset[j], clusters[k]);
+
+                dist = sqrt(sum);
+                ssw += dist;
+            }
+        }
+        ssws.push_back(sqrt(sum));
+    }
+    return ssws;
+}
+
+
+double Node::SSB() {
+    //Standard Deviation of the sum of squares between clusters and mean point values
+
+    //Find the mean point values among all points
+    double sum = 0.0;
+    double ssb = 0.0;
+    Point mean;
+    fill_n(mean.values, total_values, 0);
+
+    for(int i = 0; i < numPoints; i++){
+        mean += dataset[i];
+    }
+    for(int j = 0; j < total_values; j++){
+        mean.values[j] /= numPoints;
+    }
+
+    for(int k = 0; k < K; k++){
+        sum += squared_norm(clusters[k], mean);
+
+    }
+    ssb = sqrt(sum);
+
+    return ssb;
+}
+
 void Node::getStatistics() {
 
     double *executionTimes;
@@ -515,10 +570,38 @@ void Node::getStatistics() {
     MPI_Gather(&total_time, 1 , MPI_DOUBLE, executionTimes, 1, MPI_DOUBLE, 0, comm);
 
     if(rank == 0){
+        cout << "---------------------  Statistics  ------------------------- " << endl;
+
+        cout << " - Iteration computed: " << lastIteration << endl;
+
+        cout << "\n - Execution time: " << endl;
         for(int i = 0; i < numNodes; i++){
             cout << "Process " << i << " tooks " << executionTimes[i] << endl;
         }
+
+        cout << "\n - Number of points in each cluster" << endl;
+        for(int k = 0; k < K; k++){
+            int count = 0;
+            for (int j = 0; j < numPoints; j++) {
+                if (k == globalMembership[j]) {
+                    count++;
+                }
+            }
+            cout << "Cluster " << k << " : " << count << endl;
+
+        }
+
+        cout << "\n - Variance: " << endl;
+        cout << "    - SSW: " << endl;
+        vector<double> ssws = SSW();
+        for(int i = 0; i < ssws.size(); i++) {
+            cout << "   Cluster " << i << " : " << ssws[i] << endl;
+        }
+
+        cout << "\n   - SSB:    ";
+        double ssb = SSB();
+        cout << ssb << endl;
+
     }
 }
 
-void Node::printStatistics() {}

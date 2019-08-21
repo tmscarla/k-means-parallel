@@ -31,6 +31,7 @@ private:
                         // Se non ci sono stati e it < max iterations, allora l'algoritmo ha raggiunto la configurazione ottima
 
     int* memCounter;        //Membership count
+    int lastIteration;
 
     vector<Point> dataset;
     vector<Point> localDataset;
@@ -41,6 +42,7 @@ private:
                             // associated the id of nearest cluster in the corresponding position in membership
     int* globalMembership;
     double total_time;
+
 
 public:
     Node(int rank, MPI_Comm comm = MPI_COMM_WORLD);
@@ -58,7 +60,10 @@ public:
     void writeClusterMembership(string filename);
 
     void getStatistics();
-    void printStatistics();
+    vector<double> SSW();     //Variance within cluster (https://math.stackexchange.com/questions/1009297/variances-for-k-means-clustering)
+    double SSB();
+    double squared_norm(Point p1, Point p2);
+    void setLastIteration(int lastIt);
 
 };
 
