@@ -38,6 +38,7 @@ int main(int argc, char *argv[]) {
 
     Node node(rank, MPI_COMM_WORLD);
 
+    node.createDataset();
     node.readDataset();
 
     node.scatterDataset();

@@ -13,8 +13,10 @@
 #include <sstream>
 #include <math.h>
 #include "Node.h"
+#include "DatasetBuilder.h"
 
-//t= omp_get_wtime();
+#define NUM_THREAD 4
+
 
 Node::Node(int rank, MPI_Comm comm) : rank(rank), comm(comm), notChanged(1) {
 
@@ -27,6 +29,8 @@ Node::Node(int rank, MPI_Comm comm) : rank(rank), comm(comm), notChanged(1) {
     MPI_Type_commit(&pointType);
     total_time = 0;
     lastIteration = 0;
+    newDatasetCreated = false;
+    distance = 0;
 }
 
 double Node::squared_norm(Point p1, Point p2){
@@ -38,20 +42,132 @@ double Node::squared_norm(Point p1, Point p2){
     return sum;
 }
 
+double Node::cosine_similarity(Point p1, Point p2){
+    double num = 0.0;
+    for(int j = 0; j < total_values; j++){
+        num += p1.values[j] * p2.values[j];
+    }
+
+    double sum1 = 0.0;
+    double norm_p1 = 0.0;
+    for(int i = 0; i < total_values; i++){
+        sum1 += pow(p1.values[i], 2.0);
+    }
+    norm_p1 = sqrt(sum1);
+
+    double sum2 = 0.0;
+    double norm_p2 = 0.0;
+    for(int k = 0; k < total_values; k++){
+        sum2 += pow(p2.values[k], 2.0);
+    }
+    norm_p2 = sqrt(sum2);
+
+    return num / (norm_p1 * norm_p2);
+}
+
 void Node::setLastIteration(int lastIt) {
     lastIteration = lastIt;
+}
+
+
+void Node::createDataset() {
+    if(rank == 0) {
+
+        string answer;
+        cout << "Do you want to create a new dataset? (yes/no)" << endl;
+        getline(cin, answer);
+
+        if (answer == "yes") {
+            int numPoints, pointDimension, numClusters, maxIteration;
+            string filename, out;
+
+            cout << "How many points do you want to create?" << endl;
+            getline(cin, out);
+            numPoints = stoi(out);
+
+            cout << "Point dimension: ";
+            getline(cin, out);
+            pointDimension = stoi(out);
+
+            cout << "\nNumber of clusters: ";
+            getline(cin, out);
+            numClusters = stoi(out);
+
+            cout << "\nMax iteration: ";
+            getline(cin, out);
+            maxIteration = stoi(out);
+
+            cout << "\nFilename: ";
+            getline(cin, newDatasetFilename);
+
+            DatasetBuilder builder(numPoints, pointDimension, numClusters, maxIteration, newDatasetFilename);
+            builder.createDataset();
+
+            newDatasetCreated = true;
+        }
+
+    }
+
 }
 
 void Node::readDataset() {
 
     if (rank == 0) {
-        double start = MPI_Wtime();
-
-        // READ DATASET
         string filename, point_dimension;
-        cout << "Enter point dimension: 20, 50 or 100\n";
-        getline(cin, point_dimension);
-        filename =  "data/tweets_points_" + point_dimension + ".csv";
+
+        if(newDatasetCreated){
+            // READ CREATED DATASET
+            filename = "data/" + newDatasetFilename + ".csv";
+        }
+        else {
+            string answer;
+            cout << "Do you want to read twitter dataset? (yes/no)" << endl;
+            getline(cin, answer);
+
+            if(answer == "yes") {
+                // READ TWITTER DATASET
+                cout << "Enter point dimension: 20, 50 or 100\n";
+                getline(cin, point_dimension);
+                filename = "data/tweets_points_" + point_dimension + ".csv";
+            }
+            else{
+                cout << "Insert path to the file: " ;
+                getline(cin, filename);
+            }
+
+        }
+
+        string distance_choice;
+        bool onDistance = true;
+        while(onDistance) {
+            cout << "\nWhich distance do you want to use? " << endl;
+            cout << "1) Euclidean Distance" << endl;
+            cout << "2) Cosine Similarity" << endl;
+            cout << "Enter your choice and press return: ";
+
+            getline(cin, distance_choice);
+            distance = atoi(distance_choice.c_str());
+
+            switch(distance){
+                case 1: {
+                    onDistance = false;
+                    break;
+                }
+                case 2: {
+                    onDistance = false;
+                    break;
+                }
+
+                default: {
+                    cout << "Not a Valid Choice. \n";
+                    cout << "Choose again.\n";
+                    //getline(cin, distance_choice);
+                    //distance = atoi(distance_choice.c_str());
+                    //onDistance = false;
+                    break;
+                }
+            }
+        }
 
         ifstream infile(filename);
         string line;
@@ -95,10 +211,9 @@ void Node::readDataset() {
 
         cout << "Reading ended" << endl;
 
-        double end = MPI_Wtime();
-        total_time += end - start;
 
     }
+    MPI_Bcast(&distance, 1, MPI_INT, 0, comm);
 }
 
 
@@ -145,10 +260,10 @@ void Node::scatterDataset() {
 
     MPI_Scatter(pointsPerNode, 1, MPI_INT, &num_local_points, 1, MPI_INT, 0, comm);
 
-    //cout << "Node " << rank << " has num of points equal to " << num_local_points << "\n" << endl;
 
     localDataset.resize(num_local_points);
 
+    //Scatter points over the nodes
     MPI_Scatterv(dataset.data(), pointsPerNode, datasetDisp, pointType, localDataset.data(), num_local_points,
                  pointType, 0, comm);
 
@@ -182,7 +297,7 @@ void Node::extractCluster() {
             cout << "ERROR: Number of cluster >= number of points " << endl;
             return;
         }
-
+        /*
         vector<int> clusterIndices;
         vector<int> prohibitedIndices;
 
@@ -197,6 +312,7 @@ void Node::extractCluster() {
                 }
             }
         }
+         */
 
         string string_choice;
         int choice;
@@ -206,7 +322,7 @@ void Node::extractCluster() {
             cout << "\nChoose initialization method" <<endl;
             cout << "1) Random \n";
             cout << "2) First k points\n";
-            cout << "3) 13 points referring to 13 different topics\n";
+            cout << "3) 12 points referring to 12 different topics\n";
             cout << "Enter your choice and press return: ";
 
             getline(cin, string_choice);
@@ -214,14 +330,29 @@ void Node::extractCluster() {
 
             switch (choice){
                 case 1: {
+                    vector<int> clusterIndices;
+                    vector<int> prohibitedIndices;
+
+                    for (int i = 0; i < K; i++) {
+                        while (true) {
+                            int randIndex = rand() % dataset.size();
+
+                            if (find(prohibitedIndices.begin(), prohibitedIndices.end(), randIndex) == prohibitedIndices.end()) {
+                                prohibitedIndices.push_back(randIndex);
+                                clusterIndices.push_back(randIndex);
+                                break;
+                            }
+                        }
+                    }
                     for (int i = 0; i < clusterIndices.size(); i++) {
                         clusters.push_back(dataset[clusterIndices[i]]);
                     }
                     gameOn = false;
                     break;
                 }
+
                 case 2: {
-                    for (int i = 0; i < clusterIndices.size(); i++) {
+                    for (int i = 0; i < K; i++) {
                         clusters.push_back(dataset[i]);
                     }
                     gameOn = false;
@@ -230,7 +361,7 @@ void Node::extractCluster() {
 
                 case 3: {
                     // Fixed point referring to different topics
-                    vector<int> allDiffTopicsPoint = {0, 1, 2, 4, 5, 6, 8, 9, 13, 17, 19, 7030, 4486};
+                    vector<int> allDiffTopicsPoint = {0, 1, 2, 4, 5, 6, 8, 9, 13, 17, 19, 7030};
                     for (int i = 0; i < allDiffTopicsPoint.size(); i++) {
                         clusters.push_back(dataset[allDiffTopicsPoint[i]]);
                     }
@@ -248,27 +379,9 @@ void Node::extractCluster() {
             }
         }
 
-        /*
-        //Take points which refer to clusterIndices and send them in broadcast to all Nodes
-        for(int i = 0; i < clusterIndices.size(); i++) {
-            //clusters.push_back(dataset[clusterIndices[i]]);
-            //clusters.push_back(dataset[i]); //TODO delete this line, Adding random selection (line above)
-        }
-
-        // Fixed point referring to different topics
-        int allDiffTopicsPoint = [0, 1, 2, 4, 5, 6, 8, 9, 13, 17, 19, 7030, 4486];
-        */
-
-        /*
-        cout << "The id of point chosen for initial values of cluster are : " << endl;
-        for (int i = 0; i < clusters.size(); i++) {
-            cout << "Cluster referring to point with id: " << clusters[i].id << " with first value "
-                 << clusters[i].values[0] << endl;
-        }*/
-
-        double end = MPI_Wtime();
-        total_time += end - start;
     }
+
+    double start_ = MPI_Wtime();
 
     //Send the number of clusters in broadcast
     MPI_Bcast(&K, 1, MPI_INT, 0, comm);
@@ -278,46 +391,63 @@ void Node::extractCluster() {
     //Send the clusters centroids values
     MPI_Bcast(clusters.data(), K, pointType, 0, comm);
 
+    double end = MPI_Wtime();
+
+    if(rank == 0){
+        total_time += end - start;
+    }
+    else {
+        total_time += end - start_;
+    }
+
 }
 
 int Node::getIdNearestCluster(Point p) {
     double sum = 0.0;
-    double min_dist;
-
-
     int idCluster = 0;  //is the position in the vector clusters, not the id of the point that represents the initial centroid
 
+    if(distance == 1){  //Refers to Euclidean Distance
+        double min_dist;
 
-    //Initialize sum and min_dist
-    for (int i = 0; i < total_values; i++) {
-        sum += pow(clusters[0].values[i] - p.values[i], 2.0);
-    }
+        //Initialize sum and min_dist
+        sum = squared_norm(clusters[0], p);
+        min_dist = sqrt(sum);
 
-    min_dist = sqrt(sum);
+        //Compute the distance from others clusters
+        for (int k = 1; k < K; k++) {
 
-    //Compute the distance from others clusters
-    for (int k = 1; k < K; k++) {
+            double dist;
 
-        double dist;
+            sum = squared_norm(clusters[k], p);
+            dist = sqrt(sum);
 
-        sum = squared_norm(clusters[k], p);
-
-        dist = sqrt(sum);
-
-        if (dist < min_dist) {
-            min_dist = dist;
-            idCluster = k;
-
+            if (dist < min_dist) {
+                min_dist = dist;
+                idCluster = k;
+            }
         }
     }
+
+    else if( distance == 2){    //Refers to Cosine Similarity
+        double max_sim = 0.0;
+
+        for(int k = 0; k < K; k++){
+            double sim;
+            sim = cosine_similarity(clusters[k], p);
+
+            if (sim > max_sim){
+                max_sim = sim;
+                idCluster = k;
+            }
+        }
+    }
+
     return idCluster;
 }
 
 
 int Node::run(int it) {
     double start = MPI_Wtime();
-
-    double t_i, t_f;
 
     notChanged = 1;
     localSum.resize(K);
@@ -334,7 +464,7 @@ int Node::run(int it) {
         memCounter = new int[K] ();
     }
 
-    #pragma omp parallel for shared(memCounter) num_threads(4)
+    #pragma omp parallel for shared(memCounter) num_threads(NUM_THREAD)
     for (int i = 0; i < localDataset.size(); i++) {
 
         int old_mem = memberships[i];
@@ -343,7 +473,7 @@ int Node::run(int it) {
         if(new_mem != old_mem){
             memberships[i] = new_mem;
 
-            //critical section : memCounter is a vector and for each iteration we update at most two elements. For those element we
+            //critical section : memCounter is an array and for each iteration we update at most two elements. For those element we
             // need to guaratee the atomicity of the operation, but that lock must not block the access of other processes to
             // other array elements.
             // using atomic pragma resolves our issue: https://stackoverflow.com/questions/17553282/how-to-lock-element-of-array-using-tbb-openmp
@@ -364,7 +494,7 @@ int Node::run(int it) {
 
     /*To recalculate cluster centroids, we sum locally the points (values-to-values) which belong to a cluster.
      * The result will be a point with values equal to that sum. This point is sent (with AllReduce) to each
-     * node by each node with AllReduce which computes the sum of each value-to-value among all sent points.
+     * node by each node with AllReduce, which computes the sum of each value-to-value among all sent points.
      */
 
     //Since AllReduce doesn't support operations with vector, we need to serialize the vector into an array (reduceArr)
@@ -372,37 +502,30 @@ int Node::run(int it) {
     double reduceArr[K * total_values];
     double reduceResults[K * total_values];
 
-    t_i = omp_get_wtime();
-    #pragma omp parallel for num_threads(4)   //Questo forse rallenta
+    double t_i = omp_get_wtime();
+    #pragma omp parallel for num_threads(NUM_THREAD) shared(reduceArr)  //Questo forse rallenta
     for (int i = 0; i < K; i++) {
         for (int j = 0; j < total_values; j++) {
             reduceArr[i * total_values + j] = localSum[i].values[j];
         }
     }
 
-    t_f = omp_get_wtime();
-    //cout << "OMP time to reduceArr : " << t_f - t_i << endl;
+    double t_f = omp_get_wtime();
+    cout << "OMP time to reduceArr : " << t_f - t_i << endl;
 
 
 
     MPI_Allreduce(reduceArr, reduceResults, K * total_values, MPI_DOUBLE, MPI_SUM,
                   comm);
 
+
     for (int k = 0; k < K; k++) {
-        if(rank == 0) {
-            //cout << "Cluster in position " << k << " contains " << resMemCounter[k] << " points" << endl;
-        }
         for (int i = 0; i < total_values; i++) {
-            if(rank == 0) {
-                //cout << reduceResults[k * total_values + i] << "-->";
-            }
             if(resMemCounter[k] != 0) {
-                reduceResults[k * total_values +
-                        i] /= resMemCounter[k];
+                reduceResults[k * total_values + i] /= resMemCounter[k];
                 clusters[k].values[i] = reduceResults[k * total_values + i];
             }else{
-                reduceResults[k * total_values +
-                        i] /= 1;
+                reduceResults[k * total_values + i] /= 1;
                 clusters[k].values[i] = reduceResults[k * total_values + i];
             }
         }
@@ -431,16 +554,12 @@ void Node::updateLocalSum() {
         }
     }
 
-    //TODO reduction on localSum
-    double ti = omp_get_wtime();
     for (int i = 0; i < localDataset.size(); i++) {
         for (int j = 0; j < total_values; j++) {
             localSum[memberships[i]].values[j] += localDataset[i].values[j];
         }
     }
 
-    double tf = omp_get_wtime();
-    //cout << "Update local sum time : " << tf - ti << endl;
 }
 
 void Node::computeGlobalMembership() {
@@ -500,7 +619,7 @@ int Node::getMaxIterations(){
 
 void Node::writeClusterMembership(string filename){
     ofstream myfile;
-    myfile.open("data/" + filename + ".csv");
+    myfile.open("results/" + filename + ".csv");
     myfile << "Point_id,Cluster_id" << "\n";
     for(int p = 0; p < numPoints; p++){
         myfile << dataset[p].id << "," << clusters[globalMembership[p]].id << "\n";
@@ -601,7 +720,6 @@ void Node::getStatistics() {
         cout << "\n   - SSB:    ";
         double ssb = SSB();
         cout << ssb << endl;
-
     }
 }
 

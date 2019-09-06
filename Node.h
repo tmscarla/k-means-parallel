@@ -32,6 +32,9 @@ private:
 
     int* memCounter;        //Membership count
     int lastIteration;
+    bool newDatasetCreated;
+    string newDatasetFilename;
+    int distance;      //Integer which refers to the number of the chosen distance by the user among: 1) Euclidean Distance  2) Cosine Similarity
 
     vector<Point> dataset;
     vector<Point> localDataset;
@@ -48,6 +51,7 @@ public:
     Node(int rank, MPI_Comm comm = MPI_COMM_WORLD);
     int getMaxIterations();
     void readDataset();
+    void createDataset();
     void scatterDataset();
     void extractCluster();
     int getIdNearestCluster(Point p); //private
@@ -63,6 +67,7 @@ public:
     vector<double> SSW();     //Variance within cluster (https://math.stackexchange.com/questions/1009297/variances-for-k-means-clustering)
     double SSB();
     double squared_norm(Point p1, Point p2);
+    double cosine_similarity(Point p1, Point p2);
     void setLastIteration(int lastIt);
 
 };
