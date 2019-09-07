@@ -127,9 +127,10 @@ void Node::readDataset() {
 
             if(answer == "yes") {
                 // READ TWITTER DATASET
-                cout << "Enter point dimension: 20, 50, 100 or 4096\n";
-                getline(cin, point_dimension);
-                filename = "data/tweets_points_" + point_dimension + ".csv";
+                //cout << "Enter point dimension: 20, 50, 100 or 4096\n";
+                //getline(cin, point_dimension);
+                //filename = "data/tweets_points_" + point_dimension + ".csv";
+                filename = "data/tweets_points_4096.csv";
             }
             else{
                 cout << "Insert path to the file: " ;
