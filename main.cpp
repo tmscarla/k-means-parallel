@@ -45,7 +45,19 @@ int main(int argc, char *argv[]) {
     node.extractCluster();
     lastIteration = 0;
     for (int it = 0; it < node.getMaxIterations(); it++) {
-        //cout << "Iteration " << it << " starts!" << endl;
+        if(rank == 0) {
+            cout << "Iteration: ";
+            if (it % 3 == 0) {
+                cout << "/ " << it << "\r" << flush;
+            }
+            else if(it % 3 == 1){
+                cout << "- " << it << "\r" << flush;
+            }
+            else {
+                cout << "\\ " << it << "\r" << flush;
+            }
+        }
+
         int notChanged = node.run(it);
         //cout << "Iteration " << it << " ends!" << endl;
 

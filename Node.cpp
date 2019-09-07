@@ -378,6 +378,8 @@ void Node::extractCluster() {
                 }
             }
         }
+        double end = MPI_Wtime();
+        total_time += end - start;
 
     }
 
@@ -393,29 +395,27 @@ void Node::extractCluster() {
 
     double end = MPI_Wtime();
 
-    if(rank == 0){
-        total_time += end - start;
-    }
-    else {
+    if(rank != 0){
         total_time += end - start_;
     }
 
 }
 
 int Node::getIdNearestCluster(Point p) {
-    double sum = 0.0;
     int idCluster = 0;  //is the position in the vector clusters, not the id of the point that represents the initial centroid
 
     if(distance == 1){  //Refers to Euclidean Distance
+        double sum = 0.0;
         double min_dist;
 
         //Initialize sum and min_dist
         sum = squared_norm(clusters[0], p);
+
         min_dist = sqrt(sum);
 
         //Compute the distance from others clusters
         for (int k = 1; k < K; k++) {
-
+            sum = 0.0;
             double dist;
 
             sum = squared_norm(clusters[k], p);
@@ -428,7 +428,8 @@ int Node::getIdNearestCluster(Point p) {
         }
     }
 
-    else if( distance == 2){    //Refers to Cosine Similarity
+    else if(distance == 2){    //Refers to Cosine Similarity
+
         double max_sim = 0.0;
 
         for(int k = 0; k < K; k++){
@@ -511,8 +512,7 @@ int Node::run(int it) {
     }
 
     double t_f = omp_get_wtime();
-    cout << "OMP time to reduceArr : " << t_f - t_i << endl;
-
+    //cout << "OMP time to reduceArr : " << t_f - t_i << endl;
 
 
     MPI_Allreduce(reduceArr, reduceResults, K * total_values, MPI_DOUBLE, MPI_SUM,
@@ -714,7 +714,7 @@ void Node::getStatistics() {
         cout << "    - SSW: " << endl;
         vector<double> ssws = SSW();
         for(int i = 0; i < ssws.size(); i++) {
-            cout << "   Cluster " << i << " : " << ssws[i] << endl;
+            cout << "       Cluster " << i << " : " << ssws[i] << endl;
         }
 
         cout << "\n   - SSB:    ";
