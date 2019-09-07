@@ -31,6 +31,7 @@ Node::Node(int rank, MPI_Comm comm) : rank(rank), comm(comm), notChanged(1) {
     lastIteration = 0;
     newDatasetCreated = false;
     distance = 0;
+    omp_total_time = 0.0;
 }
 
 double Node::squared_norm(Point p1, Point p2){
@@ -126,7 +127,7 @@ void Node::readDataset() {
 
             if(answer == "yes") {
                 // READ TWITTER DATASET
-                cout << "Enter point dimension: 20, 50 or 100\n";
+                cout << "Enter point dimension: 20, 50, 100 or 4096\n";
                 getline(cin, point_dimension);
                 filename = "data/tweets_points_" + point_dimension + ".csv";
             }
@@ -449,6 +450,8 @@ int Node::getIdNearestCluster(Point p) {
 
 int Node::run(int it) {
     double start = MPI_Wtime();
+    double t_i,t_f;
+
 
     notChanged = 1;
     localSum.resize(K);
@@ -465,6 +468,7 @@ int Node::run(int it) {
         memCounter = new int[K] ();
     }
 
+    t_i = omp_get_wtime();
     #pragma omp parallel for shared(memCounter) num_threads(NUM_THREAD)
     for (int i = 0; i < localDataset.size(); i++) {
 
@@ -488,6 +492,9 @@ int Node::run(int it) {
             notChanged = 0;
         }
     }
+    t_f = omp_get_wtime();
+    omp_total_time += t_f - t_i;
+
 
 
     MPI_Allreduce(memCounter, resMemCounter, K, MPI_INT, MPI_SUM, comm);  // We obtain the number of points that belong to each cluster
@@ -503,7 +510,7 @@ int Node::run(int it) {
     double reduceArr[K * total_values];
     double reduceResults[K * total_values];
 
-    double t_i = omp_get_wtime();
+    t_i = omp_get_wtime();
     #pragma omp parallel for num_threads(NUM_THREAD) shared(reduceArr)  //Questo forse rallenta
     for (int i = 0; i < K; i++) {
         for (int j = 0; j < total_values; j++) {
@@ -511,7 +518,8 @@ int Node::run(int it) {
         }
     }
 
-    double t_f = omp_get_wtime();
+    t_f = omp_get_wtime();
+    omp_total_time += t_f - t_i;
     //cout << "OMP time to reduceArr : " << t_f - t_i << endl;
 
 
@@ -679,14 +687,17 @@ double Node::SSB() {
 void Node::getStatistics() {
 
     double *executionTimes;
+    double *ompExecTimes;
     int numNodes;
     MPI_Comm_size(comm, &numNodes);
 
     if(rank == 0) {
         executionTimes = new double[numNodes];
+        ompExecTimes = new double[numNodes];
     }
 
     MPI_Gather(&total_time, 1 , MPI_DOUBLE, executionTimes, 1, MPI_DOUBLE, 0, comm);
+    MPI_Gather(&omp_total_time, 1, MPI_DOUBLE, ompExecTimes, 1, MPI_DOUBLE, 0, comm);
 
     if(rank == 0){
         cout << "---------------------  Statistics  ------------------------- " << endl;
@@ -695,8 +706,17 @@ void Node::getStatistics() {
 
         cout << "\n - Execution time: " << endl;
         for(int i = 0; i < numNodes; i++){
-            cout << "Process " << i << " tooks " << executionTimes[i] << endl;
+            cout << "Process " << i << ": " << executionTimes[i] << endl;
         }
+
+        cout << "\n - OMP Execution time: " << endl;
+        double total_omp = 0.0;
+        for(int i = 0; i < numNodes; i++){
+            cout << "Process " << i << ": " << ompExecTimes[i] << endl;
+            total_omp += ompExecTimes[i];
+        }
+
+        cout << "Total: " << total_omp << endl;
 
         cout << "\n - Number of points in each cluster" << endl;
         for(int k = 0; k < K; k++){

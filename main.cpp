@@ -75,15 +75,11 @@ int main(int argc, char *argv[]) {
 
     node.setLastIteration(lastIteration);
 
-    //cout << "Get the memberships!!! " << endl;
     node.computeGlobalMembership();
     if(rank == 0){
         int* gm;
         gm = node.getGlobalMemberships();
         int numPoints = node.getNumPoints();
-        /*for(int i = 0; i < numPoints; i++){
-            cout << "Point " << i << " belongs to cluster " << gm[i] << endl;
-        }*/
 
         //node.printClusters();
 

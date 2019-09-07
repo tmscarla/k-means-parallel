@@ -45,6 +45,7 @@ private:
                             // associated the id of nearest cluster in the corresponding position in membership
     int* globalMembership;
     double total_time;
+    double omp_total_time;
 
 
 public:
