@@ -97,7 +97,7 @@ Suppose we have P processors, where the master node is defined by the Rank 0, an
 	- within each cluster, sum 'dimension-to-dimension' all the points that belong to that cluster. We obtain a local for each cluster, in each node. 
 
 <p align="center">
-<img src="img/MPI_Allreduce.png"/>
+<img src="https://github.com/tmscarla/k-means-parallel/blob/master/img/MPI_Allreduce.png"/>
 </p>
 
 5. Once we get the local summations, with a MPI_Allreduce operation, we can store the sum of the local summations in each node. In the same way we can obtain the number of points in each cluster globally and store that value in each nodes. So to recalculate a centroid, we can divide the global sum of that cluster over the number of points belong to it. Compute new centroids
@@ -125,7 +125,7 @@ Two distance metrics are implemented:
 2. Cosine Similarity
 
 <p align="center">
-<img src="img/summary.png"/>
+<img src="https://github.com/tmscarla/k-means-parallel/blob/master/img/summary.png"/>
 </p>
 
 
