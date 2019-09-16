@@ -51,13 +51,13 @@ Suppose we have P processors, where the master node is defined by the Rank 0, an
 <img src="https://github.com/tmscarla/k-means-parallel/blob/master/img/MPI_Allreduce.png"/>
 </p>
 
-5. Once we get the local summations, with a MPI_Allreduce operation, we can store the sum of the local summations in each node. In the same way we can obtain the number of points in each cluster globally and store that value in each nodes. So to recalculate a centroid, we can divide the global sum of that cluster over the number of points belong to it. Compute new centroids
+5. Once we get the local summations, with MPI_Allreduce operation, we can store the sum of the local summations (global sum) in each node. In the same way we can obtain the global number of points in each cluster and store that value in each nodes. So to recalculate a centroid, we can simply divide the global sum of that cluster over the number of points belong to it. Compute new centroids
 6. Go to point 4 and repeat until termination
 
 
 ## Termination
-K-means converges when no more point changes its membership status. Since our dataset is distributed among nodes, we cannot know directly if the no more changes occurs. 
-To deal with this issue, we have defined a flag in each node that is set when no more changes in the local dataset occur. Those flags are collected by nodes to check
+K-means converges when no more point changes its membership status. Since our dataset is distributed among nodes, we cannot know directly if no more changes occurs. 
+To deal with this, we have defined a flag in each node that is set when no more changes in the local dataset happen. Those flags are collected by nodes to check
 if there are changes or not. Furthermore, in order to avoid unnecessary long computation, we have limited the number of iteration that can be executed. 
 
 ## Distance Metrics
