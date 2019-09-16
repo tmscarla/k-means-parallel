@@ -15,7 +15,7 @@ Our goal is to maximize the performance, thus minimize the execution time of the
 ## Dataset 
 The first line of the dataset must contain the values of the initial paramenters, with the following order: 
 <p align="center">
-no. point dimension, no. clusters, max iterationså
+no. point dimension, no. clusters, max iterations
 </p>
 Then, each line refers to point dimensions values.
 You can create your own dataset where the dimension values of each point are randomly assigned. 
