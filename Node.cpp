@@ -463,9 +463,7 @@ int Node::run(int it) {
     fill_n(resMemCounter, K, 0);
 
     if (it == 0) {
-        // memCounter va inizializzato alla prima iterazione del ciclo. Successivamente va solo modificato in modo che se
-        // un punto cambia cluster di appartenenza, counter del numero di punti nel cluster vecchio viene decrementato, quello
-        // nuovo invece viene incrementato.
+        // memCounter must be initialize only on the first iteration, following iteration will modify it when a point changes its membership.
         memCounter = new int[K] ();
     }
 
