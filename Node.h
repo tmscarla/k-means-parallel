@@ -36,6 +36,9 @@ private:
     string newDatasetFilename;
     int distance;      //Integer which refers to the number of the chosen distance by the user among: 1) Euclidean Distance  2) Cosine Similarity
 
+    double* reduceArr;
+    double* reduceResults;
+
     vector<Point> dataset;
     vector<Point> localDataset;
     vector<Point> clusters;
@@ -48,16 +51,18 @@ private:
     double omp_total_time;
 
 
+    int getIdNearestCluster(Point p); //private
+    void updateLocalSum();  //private
+
 public:
     Node(int rank, MPI_Comm comm = MPI_COMM_WORLD);
+    ~Node();
     int getMaxIterations();
     void readDataset();
     void createDataset();
     void scatterDataset();
     void extractCluster();
-    int getIdNearestCluster(Point p); //private
     int run(int it);
-    void updateLocalSum();  //private
     void computeGlobalMembership();
     int getNumPoints();
     int* getGlobalMemberships();

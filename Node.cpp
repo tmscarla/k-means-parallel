@@ -485,6 +485,7 @@ int Node::run(int it) {
             // using atomic pragma resolves our issue: https://stackoverflow.com/questions/17553282/how-to-lock-element-of-array-using-tbb-openmp
             #pragma omp atomic update
             memCounter[new_mem]++;
+
             if(old_mem != -1){
                 #pragma omp atomic update
                 memCounter[old_mem]--;
@@ -493,6 +494,7 @@ int Node::run(int it) {
             notChanged = 0;
         }
     }
+
     t_f = omp_get_wtime();
     omp_total_time += t_f - t_i;
 
@@ -508,8 +510,13 @@ int Node::run(int it) {
 
     //Since AllReduce doesn't support operations with vector, we need to serialize the vector into an array (reduceArr)
     // and once AllReduce is done, we need to re-arrange the array obtained into a vector of Point
-    double reduceArr[K * total_values];
-    double reduceResults[K * total_values];
+    //double* reduceArr;
+
+    //double* reduceResults;
+    if(it == 0) {
+        reduceResults = new double[K * total_values];
+        reduceArr = new double[K * total_values];
+    }
 
     t_i = omp_get_wtime();
     #pragma omp parallel for num_threads(NUM_THREAD) shared(reduceArr)  //Questo forse rallenta
@@ -568,7 +575,14 @@ void Node::updateLocalSum() {
             localSum[memberships[i]].values[j] += localDataset[i].values[j];
         }
     }
+}
 
+
+Node::~Node(){
+    delete []reduceArr;
+    delete []reduceResults;
+    delete []memCounter;
+    delete []globalMembership;
 }
 
 void Node::computeGlobalMembership() {
