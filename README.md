@@ -10,7 +10,10 @@ This repo requires:
 This is an implementation of K-means, an unsupervised learning algorithm, exploiting a shared memory multiprocessing programming (OpenMP) and a message-passing protocol that allows the communication among nodes (MPI).
 
 ## Goal
-Our goal is to maximize the performance, thus minimize the execution time of the algorithm. 
+Our goal is to maximize the performance, thus minimize the execution time of the algorithm. In this case our hyperparameters are:
+- number of processors (MPI) 
+- number of threads considered in the parallel region (OpenMP)
+Best performance strongly depends on computers specifics. 
 
 ## Dataset 
 The first line of the dataset must contain the values of the initial paramenters, with the following order: 
