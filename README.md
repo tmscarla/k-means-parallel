@@ -23,7 +23,7 @@ no. point dimension, no. clusters, max iterations
 Then, each line refers to point dimensions values.
 You can create your own dataset where the dimension values of each point are randomly assigned. 
 
-# Compile and Run
+## Compile and Run
 To compile it you need to run the following command: 
 ~~~~
 mpic++ -fopenmp -o main main.cpp Node.cpp DatasetBuilder.cpp
