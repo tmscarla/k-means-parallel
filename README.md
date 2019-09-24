@@ -1,29 +1,26 @@
-# K-Means-Parallel
-A parallel implementation of the clustering algorithm K-means with OpenMP and MPI.
+# K-means parallel
+A parallel implementation of the unsupervised clustering algorithm K-means with **OpenMP** and **MPI**. The parallelization leverages on a shared memory multiprocessing programming (OpenMP) and a message-passing protocol that allows the communication among nodes (MPI).
 
 ## Requirements
-This repo requires:
+The project requires:
 - MPICH
 - OpenMP
-
-## Overview
-This is an implementation of K-means, an unsupervised learning algorithm, exploiting a shared memory multiprocessing programming (OpenMP) and a message-passing protocol that allows the communication among nodes (MPI).
 
 ## Goal
 Our goal is to maximize the performance, thus minimize the execution time of the algorithm. In this case our hyperparameters are:
 - number of processors (MPI) 
 - number of threads considered in the parallel region (OpenMP)
-Best performance strongly depends on computers specifics. 
+Best performance strongly depends on computer specifications. 
 
 ## Dataset 
-The first line of the dataset must contain the values of the initial paramenters, with the following order: 
+The first line of the dataset must contain the values of the initial parameters, in the following order: 
 <p align="center">
-no. point dimension, no. clusters, max iterations
+	<i>n. point dimension, n. clusters, max iterations</i>
 </p>
 Then, each line refers to point dimensions values.
 You can create your own dataset where the dimension values of each point are randomly assigned. 
 
-## Compile and Run
+## Compile and run
 To compile it you need to run the following command: 
 ~~~~
 mpic++ -fopenmp -o main main.cpp Node.cpp DatasetBuilder.cpp
