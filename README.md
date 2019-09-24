@@ -1,6 +1,10 @@
 # K-means parallel
 A parallel implementation of the unsupervised clustering algorithm K-means with **OpenMP** and **MPI**. The parallelization leverages on a shared memory multiprocessing programming (OpenMP) and a message-passing protocol that allows the communication among nodes (MPI).
 
+<p align="center">
+<img width="350" src="https://github.com/tmscarla/k-means-parallel/blob/master/img/kmeans.gif"/>
+</p>
+
 ## Requirements
 The project requires:
 - MPICH
@@ -51,7 +55,7 @@ Suppose we have P processors, where the master node is defined by the Rank 0, an
 	- within each cluster, sum 'dimension-to-dimension' all the points that belong to that cluster. We obtain a local for each cluster, in each node. 
 
 <p align="center">
-<img src="https://github.com/tmscarla/k-means-parallel/blob/master/img/MPI_Allreduce.png"/>
+<img width="80%" src="https://github.com/tmscarla/k-means-parallel/blob/master/img/MPI_Allreduce.png"/>
 </p>
 
 5. Once we get the local summations, with MPI_Allreduce operation, we can store the sum of the local summations (global sum) in each node. In the same way we can obtain the global number of points in each cluster and store that value in each nodes. So to recalculate a centroid, we can simply divide the global sum of that cluster over the number of points belong to it. Compute new centroids
@@ -68,7 +72,7 @@ To deal with this, we have defined a flag in each node that is set when no more 
 
 
 <p align="center">
-<img src="https://github.com/tmscarla/k-means-parallel/blob/master/img/summary.png"/>
+<img width="90%" src="https://github.com/tmscarla/k-means-parallel/blob/master/img/summary.png"/>
 </p>
 
 
